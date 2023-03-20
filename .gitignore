@@ -1,0 +1,10 @@
+**/.terraform/*
+**/_legacy/*
+
+*.tfstate
+*.tfstate.backup
+
+*.lock.hcl
+*.lock.info
+
+credentials.auto.tfvars
