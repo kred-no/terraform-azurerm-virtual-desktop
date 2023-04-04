@@ -39,12 +39,12 @@ resource "azurerm_virtual_network" "MAIN" {
 
 module "AVD" {
   source = "./../../../terraform-azurerm-virtual-desktop"
-  
+
   // Module Config
-  subnet_name             = "AvdHostPool"
+  subnet_name             = "HostPool"
   subnet_address_prefixes = ["10.99.99.0/26"]
 
-  // External Resource References
+  // Resource References
   resource_group  = azurerm_resource_group.MAIN
   virtual_network = azurerm_virtual_network.MAIN
 }

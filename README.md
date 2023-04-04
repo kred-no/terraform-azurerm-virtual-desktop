@@ -1,6 +1,6 @@
 # terraform-azurerm-virtual-desktop
 
-Deployment of Azure Virtual Desktop solution
+Deployment of Azure Virtual Desktop solution (single host-pool; for now..)
 
 | Method                    | URL                                                   |
 | :--                       | :--                                                   |

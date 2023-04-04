@@ -1,10 +1,12 @@
+# BEGINNING
+
 ////////////////////////
-// Current User Info
+// Client/User Info
 ////////////////////////
 
 data "azuread_client_config" "CURRENT" {}
 data "azurerm_client_config" "CURRENT" {}
-data "azurerm_subscription"  "CURRENT" {}
+data "azurerm_subscription" "CURRENT" {}
 
 ////////////////////////
 // External Resources
@@ -31,7 +33,7 @@ resource "random_id" "VAULT" {
 
 resource "azurerm_key_vault" "MAIN" {
   count = var.key_vault_enabled ? 1 : 0
-  
+
   name                        = length(var.key_vault_name) > 0 ? var.key_vault_name : join("", ["kv", one(random_id.VAULT[*].hex)])
   enabled_for_disk_encryption = var.key_vault_enabled_for_disk_encryption
   soft_delete_retention_days  = var.key_vault_soft_delete_retention_days
@@ -55,7 +57,7 @@ resource "azurerm_key_vault" "MAIN" {
       "Update", "Delete", "Get", "Set", "List", "Purge",
     ]
   }
-  
+
   tenant_id           = data.azurerm_client_config.CURRENT.tenant_id
   location            = data.azurerm_resource_group.MAIN.location
   resource_group_name = data.azurerm_resource_group.MAIN.name
@@ -166,7 +168,7 @@ resource "azurerm_virtual_desktop_host_pool" "MAIN" {
 }
 
 ////////////////////////
-// Host Pool Token
+// Host Pool | Token
 ////////////////////////
 
 resource "time_rotating" "TOKEN" {
@@ -179,11 +181,11 @@ resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
 }
 
 ////////////////////////
-// Host Pool Monitoring
+// Host Pool | Monitoring
 ////////////////////////
 
 resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
-  name  = join("-", [var.log_monitor_prefix, azurerm_virtual_desktop_host_pool.MAIN.name])
+  name = join("-", [var.log_monitor_prefix, azurerm_virtual_desktop_host_pool.MAIN.name])
 
   target_resource_id         = azurerm_virtual_desktop_host_pool.MAIN.id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.MAIN.id
@@ -192,9 +194,9 @@ resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
 
     for_each = [
       "AgentHealthStatus",
-       "Checkpoint",
+      "Checkpoint",
       "Connection",
-       "Error",
+      "Error",
       "HostRegistration",
       "Management",
       "NetworkData",
@@ -212,13 +214,13 @@ resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
 }
 
 ////////////////////////
-// Session Host Network
+// Session Host | Network
 ////////////////////////
 
 resource "azurerm_network_interface" "MAIN" {
   count = var.host_count
-  
-  name  = join("", [var.host_prefix, count.index])
+
+  name = join("", [var.host_prefix, count.index])
 
   ip_configuration {
     name                          = "internal"
@@ -239,10 +241,6 @@ resource "azurerm_network_interface_application_security_group_association" "MAI
   application_security_group_id = azurerm_application_security_group.MAIN.id
 }
 
-////////////////////////
-// Session Host VM
-////////////////////////
-
 // Create unique id for each VM/NIC, since destroying doesn't unregister VMs from host-pool
 resource "random_id" "VMID" {
   for_each = {
@@ -250,11 +248,15 @@ resource "random_id" "VMID" {
   }
 
   byte_length = 3
-  
+
   keepers = {
     id = each.value
   }
 }
+
+////////////////////////
+// Session Host | VM
+////////////////////////
 
 data "azurerm_shared_image" "MAIN" {
   count = var.host_gallery_image != null ? 1 : 0
@@ -287,16 +289,20 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
     for nic in azurerm_network_interface.MAIN : nic.name => nic.id
   }
 
-  name = join("-", [each.key, random_id.VMID[each.key].hex])
+  name          = each.key
+  computer_name = join("-", [each.key, random_id.VMID[each.key].hex])
 
   network_interface_ids = [
     each.value,
   ]
 
-  license_type    = var.host_license_type
-  size            = var.host_size
+  license_type = var.host_license_type
+  size         = var.host_size
+  timezone     = var.host_timezone
+  
   priority        = var.host_priority
   eviction_policy = var.host_eviction_policy
+  
   admin_username  = var.host_admin_username
   admin_password  = length(var.host_admin_password) > 0 ? var.host_admin_password : one(random_password.HOST[*].result)
 
@@ -330,12 +336,12 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
 }
 
 ////////////////////////
-// Session Host Extensions
+// Session Host | Extensions
 ////////////////////////
 
 resource "azurerm_virtual_machine_extension" "AADLOGIN" {
   for_each = {
-    for idx,vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
+    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
   }
 
   name                       = "AADLogin"
@@ -353,7 +359,7 @@ resource "azurerm_virtual_machine_extension" "AADLOGIN" {
 // RdAgent
 resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
   for_each = {
-    for idx,vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
+    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
   }
 
   depends_on = [
@@ -370,7 +376,7 @@ resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
   settings = jsonencode({
     modulesUrl            = var.host_extension_parameters.modules_url_add_session_host
     configurationFunction = "Configuration.ps1\\AddSessionHost"
-    
+
     properties = {
       HostPoolName = azurerm_virtual_desktop_host_pool.MAIN.name
       aadJoin      = true
@@ -394,7 +400,7 @@ resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
 // Required when using AAD instead of ADDS. Run last; forces reboot
 resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   for_each = {
-    for idx,vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
+    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
   }
 
   depends_on = [
@@ -430,7 +436,7 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
 
 resource "azurerm_virtual_desktop_workspace" "MAIN" {
   for_each = {
-    for ws in var.workspaces: ws.name => ws
+    for ws in var.workspaces : ws.name => ws
   }
 
   name          = each.value["name"]
@@ -443,7 +449,7 @@ resource "azurerm_virtual_desktop_workspace" "MAIN" {
 
 
 ////////////////////////
-// Desktop Workspace Monitoring
+// Desktop Workspace | Monitoring
 ////////////////////////
 
 resource "azurerm_monitor_diagnostic_setting" "APP_WORKSPACE" {
@@ -498,7 +504,7 @@ resource "azurerm_virtual_desktop_application_group" "MAIN" {
 
 resource "azurerm_virtual_desktop_workspace_application_group_association" "MAIN" {
   for_each = {
-    for group in var.application_groups: group.name => group
+    for group in var.application_groups : group.name => group
   }
 
   application_group_id = azurerm_virtual_desktop_application_group.MAIN[each.key].id
@@ -506,7 +512,7 @@ resource "azurerm_virtual_desktop_workspace_application_group_association" "MAIN
 }
 
 ////////////////////////
-// Desktop Application Group Monitoring
+// Desktop Application Group | Monitoring
 ////////////////////////
 
 resource "azurerm_monitor_diagnostic_setting" "APP_GROUP" {
@@ -544,7 +550,7 @@ resource "azurerm_monitor_diagnostic_setting" "APP_GROUP" {
 
 resource "azurerm_virtual_desktop_application" "MAIN" {
   for_each = {
-    for app in var.applications: join("-", [app.application_group_name, app.name]) => app
+    for app in var.applications : join("-", [app.application_group_name, app.name]) => app
   }
 
   name                         = each.value["name"]
@@ -706,7 +712,7 @@ resource "azurerm_virtual_desktop_scaling_plan" "MAIN" {
 ////////////////////////
 
 resource "azurerm_monitor_diagnostic_setting" "AUTOSCALER" {
-  name  = join("-", [var.log_monitor_prefix, azurerm_virtual_desktop_scaling_plan.MAIN.name])
+  name = join("-", [var.log_monitor_prefix, azurerm_virtual_desktop_scaling_plan.MAIN.name])
 
   depends_on = [
     azurerm_virtual_desktop_scaling_plan.MAIN,
@@ -723,3 +729,5 @@ resource "azurerm_monitor_diagnostic_setting" "AUTOSCALER" {
     }
   }
 }
+
+# END

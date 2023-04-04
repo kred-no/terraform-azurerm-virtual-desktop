@@ -44,17 +44,17 @@ variable "key_vault_sku_name" {
 }
 
 variable "key_vault_enabled_for_disk_encryption" {
-  type = bool
+  type    = bool
   default = true
 }
 
 variable "key_vault_soft_delete_retention_days" {
-  type = number
+  type    = number
   default = 7
 }
 
 variable "key_vault_purge_protection_enabled" {
-  type = bool
+  type    = bool
   default = false
 }
 
@@ -128,57 +128,57 @@ variable "nsg_rules" {
 ////////////////////////
 
 variable "hostpool_name" {
-  type = string
+  type    = string
   default = "default-hostpool"
 }
 
 variable "hostpool_friendly_name" {
-  type = string
+  type    = string
   default = null
 }
 
 variable "hostpool_description" {
-  type = string
+  type    = string
   default = null
 }
 
 variable "hostpool_type" {
-  type = string
+  type    = string
   default = "Pooled"
 }
 
 variable "hostpool_load_balancer_type" {
-  type = string
+  type    = string
   default = "BreadthFirst"
 }
 
 variable "hostpool_validate_environment" {
-  type = bool
+  type    = bool
   default = false
 }
 
 variable "hostpool_start_vm_on_connect" {
-  type = bool
+  type    = bool
   default = true
 }
 
 variable "hostpool_maximum_sessions_allowed" {
-  type = number
+  type    = number
   default = 1
 }
 
 variable "hostpool_custom_rdp_properties" {
-  type = string
+  type    = string
   default = "targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectlocation:i:1;videoplaybackmode:i:1;audiocapturemode:i:1;audiomode:i:0;"
 }
 
 variable "hostpool_scheduled_agent_updates_enabled" {
-  type = bool
+  type    = bool
   default = false
 }
 
 variable "hostpool_scheduled_agent_updates_timezone" {
-  type = string
+  type    = string
   default = "W. Europe Standard Time"
 }
 
@@ -192,7 +192,7 @@ variable "hostpool_scheduled_agent_updates" {
 }
 
 variable "hostpool_registration_token_rotation_hours" {
-  type = number
+  type    = number
   default = 8
 }
 
@@ -236,7 +236,7 @@ variable "host_admin_username" {
 }
 
 variable "host_admin_password" {
-  type    = string
+  type = string
   #default = "Cl@rkK3nt"
   default = ""
 }
@@ -247,7 +247,7 @@ variable "host_gallery_image" {
     gallery_name        = string
     resource_group_name = string
   })
-  
+
   default = null
 }
 
@@ -258,7 +258,7 @@ variable "host_source_image" {
     sku       = optional(string)
     version   = optional(string, "latest")
   })
-  
+
   default = {
     publisher = "MicrosoftWindowsDesktop"
     offer     = "office-365"
@@ -271,8 +271,15 @@ variable "host_extension_parameters" {
     modules_url_add_session_host = optional(string, "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_06-15-2022.zip")
     type_handler_version         = optional(string, "2.73")
   })
-  
+
   default = {}
+}
+
+variable "host_timezone" {
+  description = "See https://jackstromberg.com/2017/01/list-of-time-zones-consumed-by-azure/"
+  
+  type    = string
+  default = "W. Europe Standard Time"
 }
 
 ////////////////////////
@@ -309,7 +316,7 @@ variable "application_groups" {
     workspace_name = "DefaultWorkspace"
     type           = "Desktop"
     name           = "RemoteDesktop"
-  }, {
+    }, {
     workspace_name = "DefaultWorkspace"
     type           = "RemoteApp"
     name           = "RemoteApps"
@@ -350,27 +357,27 @@ variable "applications" {
 ////////////////////////
 
 variable "autoscaler_plan_name" {
-  type = string
+  type    = string
   default = "default-scaling-plan"
 }
 
 variable "autoscaler_plan_friendly_name" {
-  type = string
+  type    = string
   default = "Default Scaling Plan"
 }
 
 variable "autoscaler_plan_description" {
-  type = string
+  type    = string
   default = "Default Scaling Plan for Azure Virtual Desktop"
 }
 
 variable "autoscaler_plan_timezone" {
-  type = string
+  type    = string
   default = "W. Europe Standard Time"
 }
 
 variable "autoscaler_plan_enabled" {
-  type = bool
+  type    = bool
   default = false
 }
 
@@ -395,7 +402,7 @@ variable "autoscaler_plan_schedules" {
     off_peak_start_time                  = optional(string, "17:00")
     off_peak_load_balancing_algorithm    = optional(string, "DepthFirst")
   }))
-  
+
   default = [{
     name = "standard-schedule"
   }]
