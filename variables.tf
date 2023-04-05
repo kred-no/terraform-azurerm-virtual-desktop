@@ -96,8 +96,16 @@ variable "subnet_name" {
   default = "DefaultHostPool"
 }
 
-variable "subnet_address_prefixes" {
-  type = list(string)
+variable "subnet_prefixes" {
+  description = "Create subnet within provided external virtual network."
+  
+  type = object({
+    vnet_index = optional(number, 0)
+    newbits    = optional(number, 2)
+    netnum     = optional(number, 0)
+  })
+
+  default = {}
 }
 
 variable "nsg_rules" {

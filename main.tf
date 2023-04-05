@@ -83,7 +83,12 @@ resource "azurerm_log_analytics_workspace" "MAIN" {
 
 resource "azurerm_subnet" "MAIN" {
   name             = var.subnet_name
-  address_prefixes = var.subnet_address_prefixes
+  
+  address_prefixes = [cidrsubnet(
+    element(data.azurerm_virtual_network.MAIN.address_space, var.subnet_prefixes.vnet_index), 
+    var.subnet_prefixes.newbits,
+    var.subnet_prefixes.netnum,
+  )]
 
   virtual_network_name = data.azurerm_virtual_network.MAIN.name
   resource_group_name  = data.azurerm_virtual_network.MAIN.resource_group_name

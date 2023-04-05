@@ -41,8 +41,9 @@ module "AVD" {
   source = "./../../../terraform-azurerm-virtual-desktop"
 
   // Module Config
-  subnet_name             = "HostPool"
-  subnet_address_prefixes = ["10.99.99.0/26"]
+  subnet_prefixes = {
+    newbits = 2
+  }
 
   // Resource References
   resource_group  = azurerm_resource_group.MAIN
