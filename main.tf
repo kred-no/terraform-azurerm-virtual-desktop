@@ -12,13 +12,19 @@ data "azurerm_subscription" "CURRENT" {}
 // External Resources
 ////////////////////////
 
-data "azurerm_virtual_network" "MAIN" {
-  name                = var.virtual_network.name
-  resource_group_name = var.virtual_network.resource_group_name
-}
-
 data "azurerm_resource_group" "MAIN" {
   name = var.resource_group.name
+}
+
+data "azurerm_virtual_network" "MAIN" {
+  name                = var.subnet.virtual_network_name
+  resource_group_name = var.subnet.resource_group_name
+}
+
+data "azurerm_subnet" "MAIN" {
+  name                 = var.subnet.name
+  virtual_network_name = var.subnet.virtual_network_name
+  resource_group_name  = var.subnet.resource_group_name
 }
 
 ////////////////////////
@@ -34,7 +40,7 @@ resource "random_id" "VAULT" {
 resource "azurerm_key_vault" "MAIN" {
   count = var.key_vault_enabled ? 1 : 0
 
-  name                        = length(var.key_vault_name) > 0 ? var.key_vault_name : join("", ["kv", one(random_id.VAULT[*].hex)])
+  name                        = length(var.key_vault_name) > 0 ? var.key_vault_name : format("kv%s", one(random_id.VAULT[*].hex))
   enabled_for_disk_encryption = var.key_vault_enabled_for_disk_encryption
   soft_delete_retention_days  = var.key_vault_soft_delete_retention_days
   purge_protection_enabled    = var.key_vault_purge_protection_enabled
@@ -45,17 +51,9 @@ resource "azurerm_key_vault" "MAIN" {
     tenant_id = data.azurerm_client_config.CURRENT.tenant_id
     object_id = data.azurerm_client_config.CURRENT.object_id
 
-    key_permissions = [
-      "Create", "Delete", "Update", "Get", "List", "Purge",
-    ]
-
-    secret_permissions = [
-      "Get", "Set", "List", "Delete", "Purge",
-    ]
-
-    storage_permissions = [
-      "Update", "Delete", "Get", "Set", "List", "Purge",
-    ]
+    key_permissions     = ["Create", "Delete", "Update", "Get", "List", "Purge"]
+    secret_permissions  = ["Get", "Set", "List", "Delete", "Purge"]
+    storage_permissions = ["Update", "Delete", "Get", "Set", "List", "Purge"]
   }
 
   tenant_id           = data.azurerm_client_config.CURRENT.tenant_id
@@ -78,31 +76,18 @@ resource "azurerm_log_analytics_workspace" "MAIN" {
 }
 
 ////////////////////////
-// AVD Subnet
+// Network
 ////////////////////////
 
-resource "azurerm_subnet" "MAIN" {
-  name             = var.subnet_name
-  
-  address_prefixes = [cidrsubnet(
-    element(data.azurerm_virtual_network.MAIN.address_space, var.subnet_prefixes.vnet_index), 
-    var.subnet_prefixes.newbits,
-    var.subnet_prefixes.netnum,
-  )]
-
-  virtual_network_name = data.azurerm_virtual_network.MAIN.name
-  resource_group_name  = data.azurerm_virtual_network.MAIN.resource_group_name
-}
-
 resource "azurerm_application_security_group" "MAIN" {
-  name = join("-", [azurerm_subnet.MAIN.name, "asg"])
+  name = format("%s-asg", data.azurerm_subnet.MAIN.name)
 
   location            = data.azurerm_virtual_network.MAIN.location
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
 }
 
 resource "azurerm_network_security_group" "MAIN" {
-  name = join("-", [azurerm_subnet.MAIN.name, "nsg"])
+  name = format("%s-nsg", data.azurerm_subnet.MAIN.name)
 
   dynamic "security_rule" {
     for_each = var.nsg_rules
@@ -134,7 +119,7 @@ resource "azurerm_network_security_group" "MAIN" {
 
 resource "azurerm_subnet_network_security_group_association" "MAIN" {
   network_security_group_id = azurerm_network_security_group.MAIN.id
-  subnet_id                 = azurerm_subnet.MAIN.id
+  subnet_id                 = data.azurerm_subnet.MAIN.id
 }
 
 ////////////////////////
@@ -189,7 +174,7 @@ resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
 // Host Pool | Monitoring
 ////////////////////////
 
-resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
+/*resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
   name = join("-", [var.log_monitor_prefix, azurerm_virtual_desktop_host_pool.MAIN.name])
 
   target_resource_id         = azurerm_virtual_desktop_host_pool.MAIN.id
@@ -216,7 +201,7 @@ resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
       }
     }
   }
-}
+}*/
 
 ////////////////////////
 // Session Host | Network
@@ -225,12 +210,12 @@ resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
 resource "azurerm_network_interface" "MAIN" {
   count = var.host_count
 
-  name = join("", [var.host_prefix, count.index])
+  name = format("%s%s", var.host_prefix, count.index)
 
   ip_configuration {
     name                          = "internal"
     private_ip_address_allocation = "Dynamic"
-    subnet_id                     = azurerm_subnet.MAIN.id
+    subnet_id                     = data.azurerm_subnet.MAIN.id
   }
 
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
@@ -239,23 +224,23 @@ resource "azurerm_network_interface" "MAIN" {
 
 resource "azurerm_network_interface_application_security_group_association" "MAIN" {
   for_each = {
-    for nic in azurerm_network_interface.MAIN : nic.name => nic.id
+    for nic in azurerm_network_interface.MAIN : nic.name => nic
   }
 
-  network_interface_id          = each.value
+  network_interface_id          = each.value["id"]
   application_security_group_id = azurerm_application_security_group.MAIN.id
 }
 
 // Create unique id for each VM/NIC, since destroying doesn't unregister VMs from host-pool
 resource "random_id" "VMID" {
   for_each = {
-    for nic in azurerm_network_interface.MAIN : nic.name => nic.id
+    for nic in azurerm_network_interface.MAIN : nic.name => nic
   }
 
   byte_length = 3
 
   keepers = {
-    id = each.value
+    id = each.value["id"]
   }
 }
 
@@ -291,14 +276,18 @@ resource "azurerm_key_vault_secret" "HOST" {
 
 resource "azurerm_windows_virtual_machine" "MAIN" {
   for_each = {
-    for nic in azurerm_network_interface.MAIN : nic.name => nic.id
+    for nic in azurerm_network_interface.MAIN : nic.name => nic
   }
+  
+  depends_on = [
+    azurerm_network_interface.MAIN,
+  ]
 
   name          = each.key
-  computer_name = join("-", [each.key, random_id.VMID[each.key].hex])
+  computer_name = format("%s-%s", each.key, random_id.VMID[each.key].hex)
 
   network_interface_ids = [
-    each.value,
+    each.value["id"],
   ]
 
   license_type = var.host_license_type
