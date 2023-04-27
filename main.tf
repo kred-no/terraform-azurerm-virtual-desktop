@@ -671,7 +671,7 @@ resource "azurerm_role_assignment" "AUTOSCALER" {
 ////////////////////////
 // Autoscaler Plan
 ////////////////////////
-
+/*
 resource "azurerm_virtual_desktop_scaling_plan" "MAIN" {
   name          = var.autoscaler_plan_name
   friendly_name = var.autoscaler_plan_friendly_name
@@ -734,5 +734,5 @@ resource "azurerm_monitor_diagnostic_setting" "AUTOSCALER" {
     }
   }
 }
-
+*/
 # END

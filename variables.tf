@@ -101,7 +101,7 @@ variable "subnet_prefixes" {
   
   type = object({
     vnet_index = optional(number, 0)
-    newbits    = optional(number, 2)
+    newbits    = optional(number, 8)
     netnum     = optional(number, 0)
   })
 
@@ -172,7 +172,7 @@ variable "hostpool_start_vm_on_connect" {
 
 variable "hostpool_maximum_sessions_allowed" {
   type    = number
-  default = 1
+  default = 5
 }
 
 variable "hostpool_custom_rdp_properties" {
@@ -393,12 +393,14 @@ variable "autoscaler_plan_schedules" {
   type = list(object({
     name                                 = string
     days_of_week                         = optional(list(string), ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
+    peak_start_time                      = optional(string, "06:30")
+    peak_load_balancing_algorithm        = optional(string, "BreadthFirst")
+    off_peak_start_time                  = optional(string, "16:30")
+    off_peak_load_balancing_algorithm    = optional(string, "DepthFirst")
     ramp_up_start_time                   = optional(string, "07:30")
     ramp_up_load_balancing_algorithm     = optional(string, "BreadthFirst")
     ramp_up_minimum_hosts_percent        = optional(number, 40)
     ramp_up_capacity_threshold_percent   = optional(number, 20)
-    peak_start_time                      = optional(string, "08:30")
-    peak_load_balancing_algorithm        = optional(string, "BreadthFirst")
     ramp_down_start_time                 = optional(string, "15:30")
     ramp_down_load_balancing_algorithm   = optional(string, "DepthFirst")
     ramp_down_minimum_hosts_percent      = optional(number, 5)
@@ -407,8 +409,6 @@ variable "autoscaler_plan_schedules" {
     ramp_down_notification_message       = optional(string, "Please log off in the next 10 minutes")
     ramp_down_capacity_threshold_percent = optional(number, 5)
     ramp_down_stop_hosts_when            = optional(string, "ZeroSessions")
-    off_peak_start_time                  = optional(string, "17:00")
-    off_peak_load_balancing_algorithm    = optional(string, "DepthFirst")
   }))
 
   default = [{
