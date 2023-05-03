@@ -260,6 +260,12 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   tags                = var.tags
   resource_group_name = data.azurerm_resource_group.MAIN.name
   location            = data.azurerm_resource_group.MAIN.location
+  
+  lifecycle {
+    ignore_changes = [
+      admin_password,
+    ]
+  }
 }
 
 ////////////////////////
