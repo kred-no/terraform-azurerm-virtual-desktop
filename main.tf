@@ -125,7 +125,7 @@ resource "azurerm_network_interface" "MAIN" {
   count = var.host_count
 
   name = format(
-    "%s&s-%s",
+    "%s%s-%s",
     random_string.VM_UNIQUE_ID[count.index].keepers.prefix,
     count.index,
     random_string.VM_UNIQUE_ID[count.index].result,
@@ -199,7 +199,7 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   count = var.host_count
 
   name = format(
-    "%s&s-%s",
+    "%s%s-%s",
     random_string.VM_UNIQUE_ID[count.index].keepers.prefix,
     count.index,
     random_string.VM_UNIQUE_ID[count.index].result,
