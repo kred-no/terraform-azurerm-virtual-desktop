@@ -56,6 +56,7 @@ resource "azurerm_key_vault" "MAIN" {
     storage_permissions = ["Update", "Delete", "Get", "Set", "List", "Purge"]
   }
 
+  tags                = var.tags
   tenant_id           = data.azurerm_client_config.CURRENT.tenant_id
   location            = data.azurerm_resource_group.MAIN.location
   resource_group_name = data.azurerm_resource_group.MAIN.name
@@ -71,6 +72,7 @@ resource "azurerm_log_analytics_workspace" "MAIN" {
   retention_in_days = var.log_analytics_workspace_retention_days
   daily_quota_gb    = var.log_analytics_workspace_daily_quota_gb
 
+  tags                = var.tags
   location            = data.azurerm_virtual_network.MAIN.location
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
 }
@@ -171,6 +173,7 @@ resource "azurerm_network_interface" "MAIN" {
     subnet_id                     = data.azurerm_subnet.MAIN.id
   }
 
+  tags                = var.tags
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
   location            = data.azurerm_virtual_network.MAIN.location
 }
@@ -178,6 +181,7 @@ resource "azurerm_network_interface" "MAIN" {
 resource "azurerm_application_security_group" "MAIN" {
   name = format("%s-asg", data.azurerm_subnet.MAIN.name)
 
+  tags                = var.tags
   location            = data.azurerm_virtual_network.MAIN.location
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
 }
@@ -223,7 +227,6 @@ resource "random_password" "HOST" {
   special          = true
   min_special      = 2
   override_special = "*!@#?"
-
 }
 
 resource "azurerm_key_vault_secret" "HOST" {
@@ -316,9 +319,14 @@ resource "azurerm_virtual_machine_extension" "AADLOGIN" {
   auto_upgrade_minor_version = true
   automatic_upgrade_enabled  = false
   virtual_machine_id         = each.value
+  tags                       = var.tags
 
   lifecycle {
-    ignore_changes = []
+    ignore_changes = [
+      settings,
+      protected_settings,
+      tags,
+    ]
   }
 }
 
@@ -339,6 +347,7 @@ resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
   automatic_upgrade_enabled  = false
   type_handler_version       = var.host_extension_parameters.type_handler_version
   virtual_machine_id         = each.value
+  tags                       = var.tags
 
   settings = jsonencode({
     modulesUrl            = var.host_extension_parameters.modules_url_add_session_host
@@ -360,6 +369,7 @@ resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
     ignore_changes = [
       settings,
       protected_settings,
+      tags,
     ]
   }
 }
@@ -382,6 +392,7 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   auto_upgrade_minor_version = true
   automatic_upgrade_enabled  = false
   virtual_machine_id         = each.value
+  tags                       = var.tags
 
   settings = jsonencode({
     commandToExecute = join("", [
@@ -394,6 +405,8 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   lifecycle {
     ignore_changes = [
       settings,
+      protected_settings,
+      tags,
     ]
   }
 }
@@ -411,6 +424,7 @@ resource "azurerm_virtual_desktop_workspace" "MAIN" {
   friendly_name = each.value["friendly_name"]
   description   = each.value["description"]
 
+  tags                = var.tags
   resource_group_name = data.azurerm_resource_group.MAIN.name
   location            = data.azurerm_resource_group.MAIN.location
 }
@@ -465,6 +479,7 @@ resource "azurerm_virtual_desktop_application_group" "MAIN" {
   description                  = each.value["description"]
   default_desktop_display_name = each.value["default_desktop_display_name"]
 
+  tags                = var.tags
   host_pool_id        = azurerm_virtual_desktop_host_pool.MAIN.id
   resource_group_name = data.azurerm_resource_group.MAIN.name
   location            = data.azurerm_resource_group.MAIN.location
