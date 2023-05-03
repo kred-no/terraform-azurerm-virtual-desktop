@@ -109,14 +109,11 @@ resource "random_string" "VM_UNIQUE_ID" {
 }
 
 resource "azurerm_network_interface" "MAIN" {
-  count = var.host_count
+  for_each = {
+    for idx,uid in random_string.VM_UNIQUE_ID: idx => uid
+  }
 
-  name = format(
-    "%s%s-%s",
-    random_string.VM_UNIQUE_ID[count.index].keepers.prefix,
-    count.index,
-    random_string.VM_UNIQUE_ID[count.index].result,
-  )
+  name = format("%s%s-%s", each.value["keepers"].prefix, each.key, each.value["result"])
 
   ip_configuration {
     name                          = "internal"
@@ -128,9 +125,9 @@ resource "azurerm_network_interface" "MAIN" {
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
   location            = data.azurerm_virtual_network.MAIN.location
 
-  #lifecycle {
-  #  create_before_destroy = true
-  #}
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "azurerm_application_security_group" "MAIN" {
@@ -142,9 +139,11 @@ resource "azurerm_application_security_group" "MAIN" {
 }
 
 resource "azurerm_network_interface_application_security_group_association" "MAIN" {
-  count = var.host_count
+  for_each = {
+    for idx,nic in azurerm_network_interface.MAIN: idx => nic
+  }
 
-  network_interface_id          = azurerm_network_interface.MAIN[count.index].id
+  network_interface_id          = each.value["id"]
   application_security_group_id = azurerm_application_security_group.MAIN.id
 }
 
