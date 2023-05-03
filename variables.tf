@@ -233,6 +233,11 @@ variable "host_admin_password" {
   default = ""
 }
 
+variable "source_image_id" {
+  type    = string
+  default = null
+}
+
 variable "host_gallery_image" {
   type = object({
     name                = string

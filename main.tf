@@ -76,17 +76,10 @@ resource "azurerm_log_analytics_workspace" "MAIN" {
 }
 
 ////////////////////////
-// Network
+// Network Security
 ////////////////////////
 
-resource "azurerm_application_security_group" "MAIN" {
-  name = format("%s-asg", data.azurerm_subnet.MAIN.name)
-
-  location            = data.azurerm_virtual_network.MAIN.location
-  resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
-}
-
-resource "azurerm_network_security_group" "MAIN" {
+/*resource "azurerm_network_security_group" "MAIN" {
   name = format("%s-nsg", data.azurerm_subnet.MAIN.name)
 
   dynamic "security_rule" {
@@ -120,7 +113,7 @@ resource "azurerm_network_security_group" "MAIN" {
 resource "azurerm_subnet_network_security_group_association" "MAIN" {
   network_security_group_id = azurerm_network_security_group.MAIN.id
   subnet_id                 = data.azurerm_subnet.MAIN.id
-}
+}*/
 
 ////////////////////////
 // Host Pool
@@ -222,6 +215,13 @@ resource "azurerm_network_interface" "MAIN" {
   location            = data.azurerm_virtual_network.MAIN.location
 }
 
+resource "azurerm_application_security_group" "MAIN" {
+  name = format("%s-asg", data.azurerm_subnet.MAIN.name)
+
+  location            = data.azurerm_virtual_network.MAIN.location
+  resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
+}
+
 resource "azurerm_network_interface_application_security_group_association" "MAIN" {
   for_each = {
     for nic in azurerm_network_interface.MAIN : nic.name => nic
@@ -304,12 +304,16 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
     type = "SystemAssigned"
   }
 
-  source_image_id = one(data.azurerm_shared_image.MAIN[*].id)
+  // Priority: Source Image Id > Gallery Image Reference > Source Image Reference
+  source_image_id = try(var.source_image_id, one(data.azurerm_shared_image.MAIN[*].id))
 
   dynamic "source_image_reference" {
     for_each = {
       for image in [var.host_source_image] : image.offer => image
-      if var.host_gallery_image == null
+      if alltrue([
+        var.host_gallery_image == null,
+        var.source_image_id    == null,
+      ])
     }
 
     content {
