@@ -254,6 +254,10 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   size         = var.host_size
   timezone     = var.host_timezone
   
+  #vtpm_enabled               = false
+  #secure_boot_enabled        = false
+  #encryption_at_host_enabled = true
+  
   priority        = var.host_priority
   eviction_policy = var.host_eviction_policy
   
@@ -261,7 +265,8 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   admin_password  = length(var.host_admin_password) > 0 ? var.host_admin_password : one(random_password.HOST[*].result)
 
   identity {
-    type = "SystemAssigned"
+    type         = "SystemAssigned"
+    identity_ids = []
   }
 
   // Priority: Source Image Id > Gallery Image Reference > Source Image Reference
@@ -285,10 +290,12 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   }
 
   os_disk {
+    disk_size_gb         = var.host_disk_size_gb
     storage_account_type = "Standard_LRS"
     caching              = "ReadWrite"
   }
 
+  tags                = var.tags
   resource_group_name = data.azurerm_resource_group.MAIN.name
   location            = data.azurerm_resource_group.MAIN.location
 }
@@ -307,6 +314,7 @@ resource "azurerm_virtual_machine_extension" "AADLOGIN" {
   type                       = "AADLoginForWindows"
   type_handler_version       = "1.0" // az vm extension image list --name AADLoginForWindows --publisher Microsoft.Azure.ActiveDirectory --location <location> -o table
   auto_upgrade_minor_version = true
+  automatic_upgrade_enabled  = false
   virtual_machine_id         = each.value
 
   lifecycle {
@@ -328,6 +336,7 @@ resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
   publisher                  = "Microsoft.Powershell"
   type                       = "DSC"
   auto_upgrade_minor_version = true
+  automatic_upgrade_enabled  = false
   type_handler_version       = var.host_extension_parameters.type_handler_version
   virtual_machine_id         = each.value
 
@@ -371,6 +380,7 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   type                       = "CustomScriptExtension"
   type_handler_version       = "1.10" // az vm extension image list --name CustomScriptExtension --publisher Microsoft.Compute --location <location> -o table
   auto_upgrade_minor_version = true
+  automatic_upgrade_enabled  = false
   virtual_machine_id         = each.value
 
   settings = jsonencode({

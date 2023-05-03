@@ -233,6 +233,11 @@ variable "host_admin_password" {
   default = ""
 }
 
+variable "host_disk_size_gb" {
+  type    = number
+  default = 127
+}
+
 variable "source_image_id" {
   type    = string
   default = null
