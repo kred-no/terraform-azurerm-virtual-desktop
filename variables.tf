@@ -29,14 +29,9 @@ variable "subnet" {
 // Azure Key Vault
 ////////////////////////
 
-variable "key_vault_enabled" {
-  type    = bool
-  default = true
-}
-
-variable "key_vault_name" {
+variable "key_vault_prefix" {
   type    = string
-  default = ""
+  default = "kv"
 }
 
 variable "key_vault_sku_name" {
@@ -279,7 +274,7 @@ variable "host_extension_parameters" {
 
 variable "host_timezone" {
   description = "See https://jackstromberg.com/2017/01/list-of-time-zones-consumed-by-azure/"
-  
+
   type    = string
   default = "W. Europe Standard Time"
 }

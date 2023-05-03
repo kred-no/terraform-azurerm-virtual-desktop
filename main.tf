@@ -1,16 +1,10 @@
-# BEGINNING
-
 ////////////////////////
-// Client/User Info
+// Data Sources
 ////////////////////////
 
 data "azuread_client_config" "CURRENT" {}
 data "azurerm_client_config" "CURRENT" {}
 data "azurerm_subscription" "CURRENT" {}
-
-////////////////////////
-// External Resources
-////////////////////////
 
 data "azurerm_resource_group" "MAIN" {
   name = var.resource_group.name
@@ -31,16 +25,18 @@ data "azurerm_subnet" "MAIN" {
 // Azure Key Vault
 ////////////////////////
 
-resource "random_id" "VAULT" {
-  count = var.key_vault_enabled ? 1 : 0
+resource "random_string" "VAULT" {
+  length  = 22
+  special = false
+  upper   = false
 
-  byte_length = 3
+  keepers = {
+    prefix = var.key_vault_prefix
+  }
 }
 
 resource "azurerm_key_vault" "MAIN" {
-  count = var.key_vault_enabled ? 1 : 0
-
-  name                        = length(var.key_vault_name) > 0 ? var.key_vault_name : format("kv%s", one(random_id.VAULT[*].hex))
+  name                        = format("%s%s", random_string.VAULT.keepers.prefix, random_string.VAULT.result)
   enabled_for_disk_encryption = var.key_vault_enabled_for_disk_encryption
   soft_delete_retention_days  = var.key_vault_soft_delete_retention_days
   purge_protection_enabled    = var.key_vault_purge_protection_enabled
@@ -60,21 +56,6 @@ resource "azurerm_key_vault" "MAIN" {
   tenant_id           = data.azurerm_client_config.CURRENT.tenant_id
   location            = data.azurerm_resource_group.MAIN.location
   resource_group_name = data.azurerm_resource_group.MAIN.name
-}
-
-////////////////////////
-// Azure Log Analytics Workspace
-////////////////////////
-
-resource "azurerm_log_analytics_workspace" "MAIN" {
-  name              = var.log_analytics_workspace_name
-  sku               = var.log_analytics_workspace_sku
-  retention_in_days = var.log_analytics_workspace_retention_days
-  daily_quota_gb    = var.log_analytics_workspace_daily_quota_gb
-
-  tags                = var.tags
-  location            = data.azurerm_virtual_network.MAIN.location
-  resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
 }
 
 ////////////////////////
@@ -126,46 +107,29 @@ resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
 }
 
 ////////////////////////
-// Host Pool | Monitoring
+// Session Host | Network Interface
 ////////////////////////
 
-/*resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
-  name = join("-", [var.log_monitor_prefix, azurerm_virtual_desktop_host_pool.MAIN.name])
+// Create unique id for each Hostname, since destroying doesn't unregister VMs from host-pool
+resource "random_string" "VM_UNIQUE_ID" {
+  count = var.host_count
 
-  target_resource_id         = azurerm_virtual_desktop_host_pool.MAIN.id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.MAIN.id
+  length = 5
 
-  dynamic "enabled_log" {
-
-    for_each = [
-      "AgentHealthStatus",
-      "Checkpoint",
-      "Connection",
-      "Error",
-      "HostRegistration",
-      "Management",
-      "NetworkData",
-      "SessionHostManagement",
-    ]
-
-    content {
-      category = enabled_log.value
-
-      retention_policy {
-        enabled = false
-      }
-    }
+  keepers = {
+    prefix = var.host_prefix
   }
-}*/
-
-////////////////////////
-// Session Host | Network
-////////////////////////
+}
 
 resource "azurerm_network_interface" "MAIN" {
   count = var.host_count
 
-  name = format("%s%s", var.host_prefix, count.index)
+  name = format(
+    "%s&s-%s",
+    random_string.VM_UNIQUE_ID[count.index].keepers.prefix,
+    count.index,
+    random_string.VM_UNIQUE_ID[count.index].result,
+  )
 
   ip_configuration {
     name                          = "internal"
@@ -176,6 +140,10 @@ resource "azurerm_network_interface" "MAIN" {
   tags                = var.tags
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
   location            = data.azurerm_virtual_network.MAIN.location
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "azurerm_application_security_group" "MAIN" {
@@ -187,33 +155,21 @@ resource "azurerm_application_security_group" "MAIN" {
 }
 
 resource "azurerm_network_interface_application_security_group_association" "MAIN" {
-  for_each = {
-    for nic in azurerm_network_interface.MAIN : nic.name => nic
-  }
+  count = var.host_count
 
-  network_interface_id          = each.value["id"]
+  network_interface_id          = azurerm_network_interface.MAIN[count.index].id
   application_security_group_id = azurerm_application_security_group.MAIN.id
 }
 
-// Create unique id for each VM/NIC, since destroying doesn't unregister VMs from host-pool
-resource "random_id" "VMID" {
-  for_each = {
-    for nic in azurerm_network_interface.MAIN : nic.name => nic
-  }
-
-  byte_length = 3
-
-  keepers = {
-    id = each.value["id"]
-  }
-}
-
 ////////////////////////
-// Session Host | VM
+// Session Host | Image & Credentials
 ////////////////////////
 
 data "azurerm_shared_image" "MAIN" {
-  count = var.host_gallery_image != null ? 1 : 0
+  count = alltrue([
+    var.host_gallery_image != null,
+    var.source_image_id == null,
+  ]) ? 1 : 0
 
   name                = var.host_gallery_image.name
   gallery_name        = var.host_gallery_image.gallery_name
@@ -230,42 +186,44 @@ resource "random_password" "HOST" {
 }
 
 resource "azurerm_key_vault_secret" "HOST" {
-  count = var.key_vault_enabled ? 1 : 0
-
-  name         = "LocalAdminSecret"
-  key_vault_id = one(azurerm_key_vault.MAIN[*].id)
+  name         = "LocalAdministratorPassword"
+  key_vault_id = azurerm_key_vault.MAIN.id
   value        = length(var.host_admin_password) > 0 ? var.host_admin_password : one(random_password.HOST[*].result)
 }
 
+////////////////////////
+// Session Host | VM
+////////////////////////
+
 resource "azurerm_windows_virtual_machine" "MAIN" {
-  for_each = {
-    for nic in azurerm_network_interface.MAIN : nic.name => nic
-  }
-  
-  depends_on = [
-    azurerm_network_interface.MAIN,
-  ]
+  count = var.host_count
 
-  name          = each.key
-  computer_name = format("%s-%s", each.key, random_id.VMID[each.key].hex)
+  name = format(
+    "%s&s-%s",
+    random_string.VM_UNIQUE_ID[count.index].keepers.prefix,
+    count.index,
+    random_string.VM_UNIQUE_ID[count.index].result,
+  )
 
-  network_interface_ids = [
-    each.value["id"],
-  ]
+  #computer_name = each.key
 
   license_type = var.host_license_type
   size         = var.host_size
   timezone     = var.host_timezone
-  
+
   #vtpm_enabled               = false
   #secure_boot_enabled        = false
   #encryption_at_host_enabled = true
-  
+
   priority        = var.host_priority
   eviction_policy = var.host_eviction_policy
-  
-  admin_username  = var.host_admin_username
-  admin_password  = length(var.host_admin_password) > 0 ? var.host_admin_password : one(random_password.HOST[*].result)
+
+  admin_username = var.host_admin_username
+  admin_password = length(var.host_admin_password) > 0 ? var.host_admin_password : one(random_password.HOST[*].result)
+
+  network_interface_ids = [
+    azurerm_network_interface.MAIN[count.index].id,
+  ]
 
   identity {
     type         = "SystemAssigned"
@@ -280,7 +238,7 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
       for image in [var.host_source_image] : image.offer => image
       if alltrue([
         var.host_gallery_image == null,
-        var.source_image_id    == null,
+        var.source_image_id == null,
       ])
     }
 
@@ -429,41 +387,6 @@ resource "azurerm_virtual_desktop_workspace" "MAIN" {
   location            = data.azurerm_resource_group.MAIN.location
 }
 
-
-////////////////////////
-// Desktop Workspace | Monitoring
-////////////////////////
-
-resource "azurerm_monitor_diagnostic_setting" "APP_WORKSPACE" {
-  for_each = {
-    for workspace in azurerm_virtual_desktop_workspace.MAIN : workspace.name => workspace.id
-    if true
-  }
-
-  name                       = join("-", [var.log_monitor_prefix, each.key])
-  target_resource_id         = each.value
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.MAIN.id
-
-  // See https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/resource-logs-categories#microsoftdesktopvirtualizationworkspaces
-  dynamic "enabled_log" {
-
-    for_each = [
-      "Checkpoint",
-      "Error",
-      "Feed",
-      "Management",
-    ]
-
-    content {
-      category = enabled_log.value
-
-      retention_policy {
-        enabled = false
-      }
-    }
-  }
-}
-
 ////////////////////////
 // Desktop Application Groups
 ////////////////////////
@@ -492,39 +415,6 @@ resource "azurerm_virtual_desktop_workspace_application_group_association" "MAIN
 
   application_group_id = azurerm_virtual_desktop_application_group.MAIN[each.key].id
   workspace_id         = azurerm_virtual_desktop_workspace.MAIN[each.value["workspace_name"]].id
-}
-
-////////////////////////
-// Desktop Application Group | Monitoring
-////////////////////////
-
-resource "azurerm_monitor_diagnostic_setting" "APP_GROUP" {
-  for_each = {
-    for group in azurerm_virtual_desktop_application_group.MAIN : group.name => group.id
-    if true
-  }
-
-  name                       = join("-", [var.log_monitor_prefix, each.key])
-  target_resource_id         = each.value
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.MAIN.id
-
-  // See https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/resource-logs-categories#microsoftdesktopvirtualizationapplicationgroups
-  dynamic "enabled_log" {
-
-    for_each = [
-      "Checkpoint",
-      "Error",
-      "Management",
-    ]
-
-    content {
-      category = enabled_log.value
-
-      retention_policy {
-        enabled = false
-      }
-    }
-  }
 }
 
 ////////////////////////
@@ -645,72 +535,3 @@ resource "azurerm_role_assignment" "AUTOSCALER" {
   skip_service_principal_aad_check = true
   scope                            = data.azurerm_subscription.CURRENT.id
 }
-
-////////////////////////
-// Autoscaler Plan
-////////////////////////
-/*
-resource "azurerm_virtual_desktop_scaling_plan" "MAIN" {
-  name          = var.autoscaler_plan_name
-  friendly_name = var.autoscaler_plan_friendly_name
-  description   = var.autoscaler_plan_description
-  time_zone     = var.autoscaler_plan_timezone
-
-  host_pool {
-    hostpool_id          = azurerm_virtual_desktop_host_pool.MAIN.id
-    scaling_plan_enabled = var.autoscaler_plan_enabled
-  }
-
-  dynamic "schedule" {
-    for_each = var.autoscaler_plan_schedules
-
-    content {
-      name                                 = schedule.value["name"]
-      days_of_week                         = schedule.value["days_of_week"]
-      ramp_up_start_time                   = schedule.value["ramp_up_start_time"]
-      ramp_up_load_balancing_algorithm     = schedule.value["ramp_up_load_balancing_algorithm"]
-      ramp_up_minimum_hosts_percent        = schedule.value["ramp_up_minimum_hosts_percent"]
-      ramp_up_capacity_threshold_percent   = schedule.value["ramp_up_capacity_threshold_percent"]
-      peak_start_time                      = schedule.value["peak_start_time"]
-      peak_load_balancing_algorithm        = schedule.value["peak_load_balancing_algorithm"]
-      ramp_down_start_time                 = schedule.value["ramp_down_start_time"]
-      ramp_down_load_balancing_algorithm   = schedule.value["ramp_down_load_balancing_algorithm"]
-      ramp_down_minimum_hosts_percent      = schedule.value["ramp_down_minimum_hosts_percent"]
-      ramp_down_force_logoff_users         = schedule.value["ramp_down_force_logoff_users"]
-      ramp_down_wait_time_minutes          = schedule.value["ramp_down_wait_time_minutes"]
-      ramp_down_notification_message       = schedule.value["ramp_down_notification_message"]
-      ramp_down_capacity_threshold_percent = schedule.value["ramp_down_capacity_threshold_percent"]
-      ramp_down_stop_hosts_when            = schedule.value["ramp_down_stop_hosts_when"]
-      off_peak_start_time                  = schedule.value["off_peak_start_time"]
-      off_peak_load_balancing_algorithm    = schedule.value["off_peak_load_balancing_algorithm"]
-    }
-  }
-
-  location            = data.azurerm_resource_group.MAIN.location
-  resource_group_name = data.azurerm_resource_group.MAIN.name
-}
-
-////////////////////////
-// Autoscaler Monitoring
-////////////////////////
-
-resource "azurerm_monitor_diagnostic_setting" "AUTOSCALER" {
-  name = join("-", [var.log_monitor_prefix, azurerm_virtual_desktop_scaling_plan.MAIN.name])
-
-  depends_on = [
-    azurerm_virtual_desktop_scaling_plan.MAIN,
-  ]
-
-  target_resource_id         = azurerm_virtual_desktop_scaling_plan.MAIN.id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.MAIN.id
-
-  enabled_log {
-    category = "Autoscale"
-
-    retention_policy {
-      enabled = false
-    }
-  }
-}
-*/
-# END
