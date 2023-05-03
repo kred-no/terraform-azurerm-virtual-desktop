@@ -198,6 +198,10 @@ resource "azurerm_key_vault_secret" "HOST" {
 resource "azurerm_windows_virtual_machine" "MAIN" {
   count = var.host_count
 
+  depends_on = [
+    azurerm_network_interface.MAIN,
+  ]
+
   name = format(
     "%s%s-%s",
     random_string.VM_UNIQUE_ID[count.index].keepers.prefix,
