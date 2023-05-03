@@ -211,10 +211,9 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   size         = var.host_size
   timezone     = var.host_timezone
 
-  delete_os_disk_on_termination = true
-  vtpm_enabled                  = false
-  encryption_at_host_enabled    = false
-  secure_boot_enabled           = false
+  vtpm_enabled               = false
+  encryption_at_host_enabled = false
+  secure_boot_enabled        = false
 
   priority        = var.host_priority
   eviction_policy = var.host_eviction_policy
@@ -227,7 +226,7 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   ]
 
   identity {
-    type         = "SystemAssigned"
+    type = "SystemAssigned"
     #identity_ids = null
   }
 
@@ -260,10 +259,11 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   tags                = var.tags
   resource_group_name = data.azurerm_resource_group.MAIN.name
   location            = data.azurerm_resource_group.MAIN.location
-  
+
   lifecycle {
     ignore_changes = [
       admin_password,
+      custom_data,
     ]
   }
 }

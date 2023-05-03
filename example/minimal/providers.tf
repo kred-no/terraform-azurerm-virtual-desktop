@@ -18,6 +18,10 @@ provider "azurerm" {
       purge_soft_delete_on_destroy    = true
       recover_soft_deleted_key_vaults = true
     }
+
+    virtual_machine {
+      delete_os_disk_on_deletion = true
+    }
   }
 
   subscription_id = var.azure.subscription_id // ARM_SUBSCRIPTION_ID
