@@ -3,7 +3,9 @@
 ////////////////////////
 
 data "azuread_client_config" "CURRENT" {}
+
 data "azurerm_client_config" "CURRENT" {}
+
 data "azurerm_subscription" "CURRENT" {}
 
 data "azurerm_resource_group" "MAIN" {
@@ -19,6 +21,67 @@ data "azurerm_subnet" "MAIN" {
   name                 = var.subnet.name
   virtual_network_name = var.subnet.virtual_network_name
   resource_group_name  = var.subnet.resource_group_name
+}
+
+data "azurerm_shared_image" "MAIN" {
+  count = alltrue([
+    var.host_gallery_image != null,
+    var.source_image_id == null,
+  ]) ? 1 : 0
+
+  name                = var.host_gallery_image.name
+  gallery_name        = var.host_gallery_image.gallery_name
+  resource_group_name = var.host_gallery_image.resource_group_name
+}
+
+////////////////////////
+// Azure AD | Groups
+////////////////////////
+
+resource "azuread_group" "ADMIN" {
+  display_name     = var.aad_group_admins.display_name
+  security_enabled = true
+  owners           = [data.azuread_client_config.CURRENT.object_id]
+
+  lifecycle {
+    ignore_changes = [owners]
+  }
+}
+
+resource "azuread_group" "USER" {
+  display_name     = var.aad_group_users.display_name
+  security_enabled = true
+  owners           = [data.azuread_client_config.CURRENT.object_id]
+
+  lifecycle {
+    ignore_changes = [owners]
+  }
+}
+
+////////////////////////
+// Azure AD | Roles
+////////////////////////
+
+resource "azurerm_role_assignment" "ADMIN" {
+  for_each = toset([
+    "Desktop Virtualization User",
+    "Virtual Machine Administrator Login",
+  ])
+
+  role_definition_name = each.value
+  principal_id         = azuread_group.ADMIN.id
+  scope                = data.azurerm_resource_group.MAIN.id
+}
+
+resource "azurerm_role_assignment" "USER" {
+  for_each = toset([
+    "Desktop Virtualization User",
+    "Virtual Machine User Login",
+  ])
+
+  role_definition_name = each.value
+  principal_id         = azuread_group.USER.id
+  scope                = data.azurerm_resource_group.MAIN.id
 }
 
 ////////////////////////
@@ -94,7 +157,7 @@ resource "azurerm_virtual_desktop_host_pool" "MAIN" {
 }
 
 ////////////////////////
-// Session Host | Network Interface
+// Session Host | Network Interfaces
 ////////////////////////
 
 // Create unique id for each Hostname, since destroying doesn't unregister VMs from host-pool
@@ -148,19 +211,8 @@ resource "azurerm_network_interface_application_security_group_association" "MAI
 }
 
 ////////////////////////
-// Session Host | Image & Credentials
+// Session Host | Credentials
 ////////////////////////
-
-data "azurerm_shared_image" "MAIN" {
-  count = alltrue([
-    var.host_gallery_image != null,
-    var.source_image_id == null,
-  ]) ? 1 : 0
-
-  name                = var.host_gallery_image.name
-  gallery_name        = var.host_gallery_image.gallery_name
-  resource_group_name = var.host_gallery_image.resource_group_name
-}
 
 resource "random_password" "HOST" {
   count = length(var.host_admin_password) > 0 ? 0 : 1
@@ -178,7 +230,7 @@ resource "azurerm_key_vault_secret" "HOST" {
 }
 
 ////////////////////////
-// Session Host | VM
+// Session Host | Compute & Storage
 ////////////////////////
 
 resource "azurerm_windows_virtual_machine" "MAIN" {
@@ -251,292 +303,55 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
 }
 
 ////////////////////////
-// Extension | Azure AD Registration
+// Session Host | Extensions
 ////////////////////////
+// TODO: Add local module here
 
-resource "azurerm_virtual_machine_extension" "AADLOGIN" {
+module "SESSION_HOST_EXTENSIONS" {
+  source = "./modules/extensions"
+  
   for_each = {
-    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm
+    for vm in azurerm_vazurerm_windows_virtual_machine.MAIN: vm.name => vm
+    if false
   }
 
-  name                       = "AADLogin"
-  publisher                  = "Microsoft.Azure.ActiveDirectory"
-  type                       = "AADLoginForWindows"
-  type_handler_version       = "1.0" // az vm extension image list --name AADLoginForWindows --publisher Microsoft.Azure.ActiveDirectory --location <location> -o table
-  auto_upgrade_minor_version = true
-  automatic_upgrade_enabled  = false
-  virtual_machine_id         = each.value["id"]
-  tags                       = var.tags
-
-  lifecycle {
-    ignore_changes = [
-      settings,
-      protected_settings,
-      tags,
-    ]
-  }
+  tags            = var.tags
+  virtual_machine = each.value
+  host_pool       = azurerm_virtual_desktop_host_pool.MAIN
 }
 
 ////////////////////////
-// Extension | Host Pool Registration
+// Remote Desktop | Workspaces
 ////////////////////////
 
-resource "time_rotating" "TOKEN" {
-  rotation_hours = var.hostpool_registration_token_rotation_hours
-}
+/*module "REMOTE_DESKTOP_WORKSPACE" {
+  source = "./modules/workspace"
+  
+  for_each = var.workspaces
 
-resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
-  hostpool_id     = azurerm_virtual_desktop_host_pool.MAIN.id
-  expiration_date = time_rotating.TOKEN.rotation_rfc3339
-}
-
-resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
-  for_each = {
-    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm
-  }
-
-  depends_on = [
-    azurerm_virtual_machine_extension.AADLOGIN,
-  ]
-
-  name                       = "AddSessionHost"
-  publisher                  = "Microsoft.Powershell"
-  type                       = "DSC"
-  auto_upgrade_minor_version = true
-  automatic_upgrade_enabled  = false
-  type_handler_version       = var.host_extension_parameters.type_handler_version
-  virtual_machine_id         = each.value["id"]
-  tags                       = var.tags
-
-  settings = jsonencode({
-    modulesUrl            = var.host_extension_parameters.modules_url_add_session_host
-    configurationFunction = "Configuration.ps1\\AddSessionHost"
-
-    properties = {
-      HostPoolName = azurerm_virtual_desktop_host_pool.MAIN.name
-      aadJoin      = true
-    }
-  })
-
-  protected_settings = jsonencode({
-    properties = {
-      registrationInfoToken = azurerm_virtual_desktop_host_pool_registration_info.MAIN.token
-    }
-  })
-
-  lifecycle {
-    ignore_changes = [
-      settings,
-      protected_settings,
-      tags,
-    ]
-  }
-}
+  tags = var.tags
+}*/
 
 ////////////////////////
-// Extension | Azure AD Fix
-////////////////////////
-// Required when using AAD instead of ADDS. Run last; forces reboot
-
-resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
-  for_each = {
-    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm
-  }
-
-  depends_on = [
-    azurerm_virtual_machine_extension.AADLOGIN,
-    azurerm_virtual_machine_extension.HOSTPOOL,
-  ]
-
-  name                       = "AADJPRIVATE"
-  publisher                  = "Microsoft.Compute"
-  type                       = "CustomScriptExtension"
-  type_handler_version       = "1.10" // az vm extension image list --name CustomScriptExtension --publisher Microsoft.Compute --location <location> -o table
-  auto_upgrade_minor_version = true
-  automatic_upgrade_enabled  = false
-  virtual_machine_id         = each.value["id"]
-  tags                       = var.tags
-
-  settings = jsonencode({
-    commandToExecute = join("", [
-      "powershell.exe -Command \"New-Item -Path HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\\AADJPrivate\"",
-      ";shutdown -r -t 10",
-      ";exit 0",
-    ])
-  })
-
-  lifecycle {
-    ignore_changes = [
-      settings,
-      protected_settings,
-      tags,
-    ]
-  }
-}
-
-////////////////////////
-// Desktop Workspace
+// Monitoring
 ////////////////////////
 
-resource "azurerm_virtual_desktop_workspace" "MAIN" {
-  for_each = {
-    for ws in var.workspaces : ws.name => ws
-  }
+/*module "AZURE_MONITORING" {
+  source = "./modules/moinitoring"
+  
+  for_each = []
 
-  name          = each.value["name"]
-  friendly_name = each.value["friendly_name"]
-  description   = each.value["description"]
-
-  tags                = var.tags
-  resource_group_name = data.azurerm_resource_group.MAIN.name
-  location            = data.azurerm_resource_group.MAIN.location
-}
+  tags = var.tags
+}*/
 
 ////////////////////////
-// Desktop Application Groups
+// Session Host | AutoScaling
 ////////////////////////
 
-resource "azurerm_virtual_desktop_application_group" "MAIN" {
-  for_each = {
-    for group in var.application_groups : group.name => group
-  }
+/*module "REMOTE_DESKTOP_AUTOSCALER" {
+  source = "./modules/autoscaler"
+  
+  for_each = []
 
-  name                         = each.value["name"]
-  type                         = each.value["type"]
-  friendly_name                = each.value["friendly_name"]
-  description                  = each.value["description"]
-  default_desktop_display_name = each.value["default_desktop_display_name"]
-
-  tags                = var.tags
-  host_pool_id        = azurerm_virtual_desktop_host_pool.MAIN.id
-  resource_group_name = data.azurerm_resource_group.MAIN.name
-  location            = data.azurerm_resource_group.MAIN.location
-}
-
-resource "azurerm_virtual_desktop_workspace_application_group_association" "MAIN" {
-  for_each = {
-    for group in var.application_groups : group.name => group
-  }
-
-  application_group_id = azurerm_virtual_desktop_application_group.MAIN[each.key].id
-  workspace_id         = azurerm_virtual_desktop_workspace.MAIN[each.value["workspace_name"]].id
-}
-
-////////////////////////
-// Desktop Remote Apps
-////////////////////////
-
-resource "azurerm_virtual_desktop_application" "MAIN" {
-  for_each = {
-    for app in var.applications : join("-", [app.application_group_name, app.name]) => app
-  }
-
-  name                         = each.value["name"]
-  friendly_name                = each.value["friendly_name"]
-  description                  = each.value["description"]
-  path                         = each.value["path"]
-  command_line_argument_policy = each.value["command_line_argument_policy"]
-  command_line_arguments       = each.value["command_line_arguments"]
-  show_in_portal               = each.value["show_in_portal"]
-  icon_path                    = each.value["icon_path"]
-  icon_index                   = each.value["icon_index"]
-
-  application_group_id = azurerm_virtual_desktop_application_group.MAIN[each.value["application_group_name"]].id
-}
-
-////////////////////////
-// Azure AD Groups
-////////////////////////
-
-resource "azuread_group" "ADMIN" {
-  display_name     = var.aad_group_admins.display_name
-  security_enabled = true
-  owners           = [data.azuread_client_config.CURRENT.object_id]
-
-  lifecycle {
-    ignore_changes = [owners]
-  }
-}
-
-resource "azuread_group" "USER" {
-  display_name     = var.aad_group_users.display_name
-  security_enabled = true
-  owners           = [data.azuread_client_config.CURRENT.object_id]
-
-  lifecycle {
-    ignore_changes = [owners]
-  }
-}
-
-////////////////////////
-// Azure AD Roles
-////////////////////////
-
-resource "azurerm_role_assignment" "ADMIN" {
-  for_each = toset([
-    "Desktop Virtualization User",
-    "Virtual Machine Administrator Login",
-  ])
-
-  role_definition_name = each.value
-  principal_id         = azuread_group.ADMIN.id
-  scope                = data.azurerm_resource_group.MAIN.id
-}
-
-resource "azurerm_role_assignment" "USER" {
-  for_each = toset([
-    "Desktop Virtualization User",
-    "Virtual Machine User Login",
-  ])
-
-  role_definition_name = each.value
-  principal_id         = azuread_group.USER.id
-  scope                = data.azurerm_resource_group.MAIN.id
-}
-
-/////////////////////////////////
-// Autoscaler Role
-//////////////////////////////////
-
-data "azuread_service_principal" "AUTOSCALER" {
-  display_name = "Windows Virtual Desktop"
-}
-
-resource "azurerm_role_definition" "AUTOSCALER" {
-  name        = "avd-autoscaler-custom-role"
-  description = "Custom Autoscaler Role (Azure Virtual Desktop)"
-  scope       = data.azurerm_subscription.CURRENT.id
-
-  permissions {
-    actions = [
-      "Microsoft.Insights/eventtypes/values/read",
-      "Microsoft.Compute/virtualMachines/deallocate/action",
-      "Microsoft.Compute/virtualMachines/restart/action",
-      "Microsoft.Compute/virtualMachines/powerOff/action",
-      "Microsoft.Compute/virtualMachines/start/action",
-      "Microsoft.Compute/virtualMachines/read",
-      "Microsoft.DesktopVirtualization/hostpools/read",
-      "Microsoft.DesktopVirtualization/hostpools/write",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/read",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/write",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/delete",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/read",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/sendMessage/action",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/read"
-    ]
-
-    not_actions = []
-  }
-
-  assignable_scopes = [
-    data.azurerm_subscription.CURRENT.id,
-  ]
-}
-
-resource "azurerm_role_assignment" "AUTOSCALER" {
-  principal_id       = data.azuread_service_principal.AUTOSCALER.id
-  role_definition_id = azurerm_role_definition.AUTOSCALER.role_definition_resource_id
-
-  skip_service_principal_aad_check = true
-  scope                            = data.azurerm_subscription.CURRENT.id
-}
+  tags = var.tags
+}*/
