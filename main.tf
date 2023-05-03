@@ -205,15 +205,16 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
     random_string.VM_UNIQUE_ID[count.index].result,
   )
 
-  #computer_name = each.key
+  #computer_name = each.key //Registered in Azure AD
 
   license_type = var.host_license_type
   size         = var.host_size
   timezone     = var.host_timezone
 
-  #vtpm_enabled               = false
-  #secure_boot_enabled        = false
-  #encryption_at_host_enabled = true
+  delete_os_disk_on_termination = true
+  vtpm_enabled                  = false
+  encryption_at_host_enabled    = false
+  secure_boot_enabled           = false
 
   priority        = var.host_priority
   eviction_policy = var.host_eviction_policy
@@ -227,7 +228,7 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
 
   identity {
     type         = "SystemAssigned"
-    identity_ids = []
+    #identity_ids = null
   }
 
   // Priority: Source Image Id > Gallery Image Reference > Source Image Reference
