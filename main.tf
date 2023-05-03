@@ -94,19 +94,6 @@ resource "azurerm_virtual_desktop_host_pool" "MAIN" {
 }
 
 ////////////////////////
-// Host Pool | Token
-////////////////////////
-
-resource "time_rotating" "TOKEN" {
-  rotation_hours = var.hostpool_registration_token_rotation_hours
-}
-
-resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
-  hostpool_id     = azurerm_virtual_desktop_host_pool.MAIN.id
-  expiration_date = time_rotating.TOKEN.rotation_rfc3339
-}
-
-////////////////////////
 // Session Host | Network Interface
 ////////////////////////
 
@@ -141,9 +128,9 @@ resource "azurerm_network_interface" "MAIN" {
   resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
   location            = data.azurerm_virtual_network.MAIN.location
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  #lifecycle {
+  #  create_before_destroy = true
+  #}
 }
 
 resource "azurerm_application_security_group" "MAIN" {
@@ -196,20 +183,12 @@ resource "azurerm_key_vault_secret" "HOST" {
 ////////////////////////
 
 resource "azurerm_windows_virtual_machine" "MAIN" {
-  count = var.host_count
+  for_each = {
+    for idx, nic in azurerm_network_interface.MAIN : idx => nic
+  }
 
-  depends_on = [
-    azurerm_network_interface.MAIN,
-  ]
-
-  name = format(
-    "%s%s-%s",
-    random_string.VM_UNIQUE_ID[count.index].keepers.prefix,
-    count.index,
-    random_string.VM_UNIQUE_ID[count.index].result,
-  )
-
-  #computer_name = each.key //Registered in Azure AD
+  name          = format("%s%s", var.host_prefix, each.key)
+  computer_name = each.value["name"] // Registered in Azure AD
 
   license_type = var.host_license_type
   size         = var.host_size
@@ -226,12 +205,12 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   admin_password = length(var.host_admin_password) > 0 ? var.host_admin_password : one(random_password.HOST[*].result)
 
   network_interface_ids = [
-    azurerm_network_interface.MAIN[count.index].id,
+    #azurerm_network_interface.MAIN[count.index].id,
+    each.value["id"]
   ]
 
   identity {
     type = "SystemAssigned"
-    #identity_ids = null
   }
 
   // Priority: Source Image Id > Gallery Image Reference > Source Image Reference
@@ -273,12 +252,12 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
 }
 
 ////////////////////////
-// Session Host | Extensions
+// Extension | Azure AD Registration
 ////////////////////////
 
 resource "azurerm_virtual_machine_extension" "AADLOGIN" {
   for_each = {
-    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
+    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm
   }
 
   name                       = "AADLogin"
@@ -287,7 +266,7 @@ resource "azurerm_virtual_machine_extension" "AADLOGIN" {
   type_handler_version       = "1.0" // az vm extension image list --name AADLoginForWindows --publisher Microsoft.Azure.ActiveDirectory --location <location> -o table
   auto_upgrade_minor_version = true
   automatic_upgrade_enabled  = false
-  virtual_machine_id         = each.value
+  virtual_machine_id         = each.value["id"]
   tags                       = var.tags
 
   lifecycle {
@@ -299,10 +278,22 @@ resource "azurerm_virtual_machine_extension" "AADLOGIN" {
   }
 }
 
-// RdAgent
+////////////////////////
+// Extension | Host Pool Registration
+////////////////////////
+
+resource "time_rotating" "TOKEN" {
+  rotation_hours = var.hostpool_registration_token_rotation_hours
+}
+
+resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
+  hostpool_id     = azurerm_virtual_desktop_host_pool.MAIN.id
+  expiration_date = time_rotating.TOKEN.rotation_rfc3339
+}
+
 resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
   for_each = {
-    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
+    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm
   }
 
   depends_on = [
@@ -315,7 +306,7 @@ resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
   auto_upgrade_minor_version = true
   automatic_upgrade_enabled  = false
   type_handler_version       = var.host_extension_parameters.type_handler_version
-  virtual_machine_id         = each.value
+  virtual_machine_id         = each.value["id"]
   tags                       = var.tags
 
   settings = jsonencode({
@@ -343,10 +334,14 @@ resource "azurerm_virtual_machine_extension" "HOSTPOOL" {
   }
 }
 
+////////////////////////
+// Extension | Azure AD Fix
+////////////////////////
 // Required when using AAD instead of ADDS. Run last; forces reboot
+
 resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   for_each = {
-    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm.id
+    for idx, vm in azurerm_windows_virtual_machine.MAIN : idx => vm
   }
 
   depends_on = [
@@ -360,7 +355,7 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   type_handler_version       = "1.10" // az vm extension image list --name CustomScriptExtension --publisher Microsoft.Compute --location <location> -o table
   auto_upgrade_minor_version = true
   automatic_upgrade_enabled  = false
-  virtual_machine_id         = each.value
+  virtual_machine_id         = each.value["id"]
   tags                       = var.tags
 
   settings = jsonencode({
