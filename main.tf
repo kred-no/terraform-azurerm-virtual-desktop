@@ -76,46 +76,6 @@ resource "azurerm_log_analytics_workspace" "MAIN" {
 }
 
 ////////////////////////
-// Network Security
-////////////////////////
-
-/*resource "azurerm_network_security_group" "MAIN" {
-  name = format("%s-nsg", data.azurerm_subnet.MAIN.name)
-
-  dynamic "security_rule" {
-    for_each = var.nsg_rules
-
-    content {
-      name                       = security_rule.value["name"]
-      priority                   = security_rule.value["priority"]
-      direction                  = security_rule.value["direction"]
-      access                     = security_rule.value["access"]
-      protocol                   = security_rule.value["protocol"]
-      source_port_range          = security_rule.value["source_port_range"]
-      source_address_prefix      = security_rule.value["source_address_prefix"]
-      destination_port_range     = security_rule.value["destination_port_range"]
-      destination_address_prefix = security_rule.value["destination_address_prefix"]
-
-      source_application_security_group_ids = flatten([
-        try(length(security_rule.value["source_address_prefix"]) > 0, false) ? [] : [azurerm_application_security_group.MAIN.id],
-      ])
-
-      destination_application_security_group_ids = flatten([
-        try(length(security_rule.value["destination_address_prefix"] > 0), false) ? [] : [azurerm_application_security_group.MAIN.id],
-      ])
-    }
-  }
-
-  location            = data.azurerm_virtual_network.MAIN.location
-  resource_group_name = data.azurerm_virtual_network.MAIN.resource_group_name
-}
-
-resource "azurerm_subnet_network_security_group_association" "MAIN" {
-  network_security_group_id = azurerm_network_security_group.MAIN.id
-  subnet_id                 = data.azurerm_subnet.MAIN.id
-}*/
-
-////////////////////////
 // Host Pool
 ////////////////////////
 
