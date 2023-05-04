@@ -96,6 +96,50 @@ variable "host_pool" {
 }
 
 ////////////////////////
+// AVD Scaling Plan
+////////////////////////
+
+variable "scaling_plan" {
+  type = object({
+    name          = string
+    friendly_name = optional(string)
+    description   = optional(string)
+    time_zone     = optional(string, "W. Europe Standard Time")
+    enabled       = optional(bool, true)
+
+    schedules = optional(list(object({
+      name                                 = string
+      days_of_week                         = optional(list(string), ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
+      ramp_up_start_time                   = optional(string, "05:00")
+      ramp_up_load_balancing_algorithm     = optional(string, "BreadthFirst")
+      ramp_up_minimum_hosts_percent        = optional(number, 35)
+      ramp_up_capacity_threshold_percent   = optional(number, 85)
+      peak_start_time                      = optional(string, "09:00")
+      peak_load_balancing_algorithm        = optional(string, "BreadthFirst")
+      ramp_down_start_time                 = optional(string, "15:00")
+      ramp_down_load_balancing_algorithm   = optional(string, "BreadthFirst")
+      ramp_down_minimum_hosts_percent      = optional(number, 15)
+      ramp_down_force_logoff_users         = optional(bool, true)
+      ramp_down_wait_time_minutes          = optional(number, 45)
+      ramp_down_notification_message       = optional(string, "Scaling down in progress; please relog within 45 minutes.")
+      ramp_down_capacity_threshold_percent = optional(number, 5)
+      ramp_down_stop_hosts_when            = optional(string, "ZeroSessions")
+      off_peak_start_time                  = optional(string, "17:00")
+      off_peak_load_balancing_algorithm    = optional(string, "BreadthFirst")
+
+    })), [])
+  })
+
+  default = {
+    name = "default-scaling-plan"
+
+    schedules = [{
+      name = "Weekdays"
+    }]
+  }
+}
+
+////////////////////////
 // AVD Workspaces
 ////////////////////////
 
@@ -167,7 +211,7 @@ variable "session_hosts" {
 
 
 ////////////////////////
-// AVD Session Host Extensions
+// AVD Session Host | Extensions
 ////////////////////////
 
 variable "session_host_extensions" {
@@ -180,14 +224,14 @@ variable "session_host_extensions" {
       intune_registration        = optional(bool, true)
     }), {})
 
-    // This function includes a 6 minute 'sleep' due to 'Intune'
+    // This function includes a 6+ minute 'sleep' due to 'Intune' registration
     join_hostpool = optional(object({
       enabled                    = optional(bool, true)
       type_handler_version       = optional(string, "2.83") // Working: 2.73
       auto_upgrade_minor_version = optional(bool, true)
       automatic_upgrade_enabled  = optional(bool, false)
       modules_url                = optional(string, "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_06-15-2022.zip") # Working: Configuration_06-15-2022.zip
-      modules_function           = optional(string, "Configuration.ps1\\AddSessionHost") // See https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/scripts/Configuration.ps1
+      modules_function           = optional(string, "Configuration.ps1\\AddSessionHost")                                                                // See https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/scripts/Configuration.ps1
     }), {})
 
     aadjprivate_registry_update = optional(object({
@@ -222,85 +266,16 @@ variable "session_host_extensions" {
 ////////////////////////
 // Monitoring
 ////////////////////////
-/*
-variable "log_analytics_workspace_name" {
-  type    = string
-  default = "avd-analytics"
+
+variable "analytics" {
+  type = object({
+    enabled                     = optional(bool, false)
+    log_prefix                  = optional(string, "avdlogs")
+    workspace_name              = optional(string, "avdmon")
+    workspace_sku               = optional(string, "PerGB2018")
+    workspace_retention_in_days = optional(number, 30)
+    workspace_daily_quota_gb    = optional(number, null)
+  })
+
+  default = {}
 }
-
-variable "log_analytics_workspace_sku" {
-  type    = string
-  default = "PerGB2018"
-}
-
-variable "log_analytics_workspace_retention_days" {
-  type    = number
-  default = 30
-}
-
-variable "log_analytics_workspace_daily_quota_gb" {
-  type    = number
-  default = null
-}
-
-variable "log_monitor_prefix" {
-  type    = string
-  default = "monitor"
-}*/
-
-////////////////////////
-// AVD Autoscaling
-////////////////////////
-
-/*variable "autoscaler_plan_name" {
-  type    = string
-  default = "default-scaling-plan"
-}
-
-variable "autoscaler_plan_friendly_name" {
-  type    = string
-  default = "Default Scaling Plan"
-}
-
-variable "autoscaler_plan_description" {
-  type    = string
-  default = "Default Scaling Plan for Azure Virtual Desktop"
-}
-
-variable "autoscaler_plan_timezone" {
-  type    = string
-  default = "W. Europe Standard Time"
-}
-
-variable "autoscaler_plan_enabled" {
-  type    = bool
-  default = false
-}
-
-variable "autoscaler_plan_schedules" {
-  type = list(object({
-    name                                 = string
-    days_of_week                         = optional(list(string), ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
-    peak_start_time                      = optional(string, "06:30")
-    peak_load_balancing_algorithm        = optional(string, "BreadthFirst")
-    off_peak_start_time                  = optional(string, "16:30")
-    off_peak_load_balancing_algorithm    = optional(string, "DepthFirst")
-    ramp_up_start_time                   = optional(string, "07:30")
-    ramp_up_load_balancing_algorithm     = optional(string, "BreadthFirst")
-    ramp_up_minimum_hosts_percent        = optional(number, 40)
-    ramp_up_capacity_threshold_percent   = optional(number, 20)
-    ramp_down_start_time                 = optional(string, "15:30")
-    ramp_down_load_balancing_algorithm   = optional(string, "DepthFirst")
-    ramp_down_minimum_hosts_percent      = optional(number, 5)
-    ramp_down_force_logoff_users         = optional(bool, false)
-    ramp_down_wait_time_minutes          = optional(number, 10)
-    ramp_down_notification_message       = optional(string, "Please log off in the next 10 minutes")
-    ramp_down_capacity_threshold_percent = optional(number, 5)
-    ramp_down_stop_hosts_when            = optional(string, "ZeroSessions")
-  }))
-
-  default = [{
-    name = "standard-schedule"
-  }]
-}
-*/

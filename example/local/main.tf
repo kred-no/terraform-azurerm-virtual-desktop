@@ -3,11 +3,11 @@
 //////////////////////////////////
 
 locals {
-  prefix   = "AzureVirtualDesktop"
+  prefix   = "AVD"
   location = "northeurope"
   network  = "10.99.99.0/24"
 
-  session_host_count = 0
+  session_host_count = 1
   session_host_size  = "Standard_DS2_v2"
 }
 
@@ -15,21 +15,23 @@ locals {
 // Required Resources
 //////////////////////////////////
 
-resource "random_id" "RESOURCE_GROUP_ID" {
+resource "random_string" "RESOURCE_GROUP_ID" {
+  length  = 5
+  upper   = false
+  special = false
+
   keepers = {
     prefix = local.prefix
   }
-
-  byte_length = 3
 }
 
 resource "azurerm_resource_group" "MAIN" {
-  name     = join("-", [random_id.RESOURCE_GROUP_ID.keepers.prefix, random_id.RESOURCE_GROUP_ID.hex])
+  name     = format("%s-%s", random_string.RESOURCE_GROUP_ID.keepers.prefix, random_string.RESOURCE_GROUP_ID.result)
   location = local.location
 }
 
 resource "azurerm_virtual_network" "MAIN" {
-  name          = format("%s-VirtualNetwork", local.prefix)
+  name          = "AvdNetwork"
   address_space = [cidrsubnet(local.network, 0, 0)]
 
   resource_group_name = azurerm_resource_group.MAIN.name
@@ -37,7 +39,7 @@ resource "azurerm_virtual_network" "MAIN" {
 }
 
 resource "azurerm_subnet" "MAIN" {
-  name             = format("%s-Subnet", local.prefix)
+  name             = "SessionHosts"
   address_prefixes = [cidrsubnet(local.network, 2, 0)]
 
   virtual_network_name = azurerm_virtual_network.MAIN.name
@@ -48,7 +50,7 @@ resource "azurerm_subnet" "MAIN" {
 // Module Config
 //////////////////////////////////
 
-module "VIRTUAL_DESKTOP" {
+module "AZURE_VIRTUAL_DESKTOP" {
   source = "./../../../terraform-azurerm-virtual-desktop"
 
   // Module Config
@@ -56,22 +58,22 @@ module "VIRTUAL_DESKTOP" {
   avd_group_admins = { display_name = "Demo AVD Admins" }
 
   host_pool = {
-    name                     = "primary-pool"
+    name                     = "DefaultHostPool"
     load_balancer_type       = "BreadthFirst"
-    maximum_sessions_allowed = 3
+    maximum_sessions_allowed = 5
   }
 
   session_hosts = {
-    prefix         = "shvm"
-    count          = local.session_host_count
-    size           = local.session_host_size
+    prefix = "w11sh"
+    count  = local.session_host_count
+    size   = local.session_host_size
   }
 
   workspaces = [{
-    name = "DefaultWorkspace"
+    name = "MyWorkspace"
 
     application_groups = [{
-      name = "ExampleRemoteDesktop"
+      name = "RemoteDesktop"
       type = "Desktop"
     }]
   }]

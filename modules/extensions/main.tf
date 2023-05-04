@@ -10,11 +10,11 @@ resource "azurerm_virtual_machine_extension" "EXTRA" {
   name      = each.value["name"]
   publisher = each.value["publisher"]
   type      = each.value["type"]
-  
+
   type_handler_version       = each.value["type_handler_version"]
   auto_upgrade_minor_version = each.value["auto_upgrade_minor_version"]
   automatic_upgrade_enabled  = each.value["automatic_upgrade_enabled"]
-  
+
   settings           = each.value["json_settings"]
   protected_settings = each.value["json_protected_settings"]
 
@@ -37,7 +37,7 @@ resource "azurerm_virtual_machine_extension" "AZURE_AD_LOGIN" {
   name      = "AADLogin"
   publisher = "Microsoft.Azure.ActiveDirectory"
   type      = "AADLoginForWindows"
-  
+
   type_handler_version       = var.parameters.aad_login_for_windows.type_handler_version
   auto_upgrade_minor_version = var.parameters.aad_login_for_windows.auto_upgrade_minor_version
   automatic_upgrade_enabled  = var.parameters.aad_login_for_windows.automatic_upgrade_enabled
@@ -65,7 +65,7 @@ resource "time_rotating" "HOSTPOOL_TOKEN" {
 resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
   hostpool_id     = var.host_pool.id
   expiration_date = time_rotating.HOSTPOOL_TOKEN.rotation_rfc3339
-  
+
   lifecycle {
     ignore_changes = [expiration_date]
   }
@@ -78,7 +78,7 @@ resource "azurerm_virtual_machine_extension" "JOIN_HOSTPOOL" {
   name      = "AddSessionHost"
   publisher = "Microsoft.Powershell"
   type      = "DSC"
-  
+
   type_handler_version       = var.parameters.join_hostpool.type_handler_version
   auto_upgrade_minor_version = var.parameters.join_hostpool.auto_upgrade_minor_version
   automatic_upgrade_enabled  = var.parameters.join_hostpool.automatic_upgrade_enabled
@@ -115,7 +115,7 @@ resource "azurerm_virtual_machine_extension" "JOIN_HOSTPOOL" {
 
 resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   count = var.parameters.aadjprivate_registry_update.enabled ? 1 : 0
-  
+
   depends_on = [
     azurerm_virtual_machine_extension.JOIN_HOSTPOOL,
     azurerm_virtual_machine_extension.EXTRA,
@@ -124,7 +124,7 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   name      = "AADJPRIVATE"
   publisher = "Microsoft.Compute"
   type      = "CustomScriptExtension"
-  
+
   type_handler_version       = var.parameters.aadjprivate_registry_update.type_handler_version
   auto_upgrade_minor_version = var.parameters.aadjprivate_registry_update.auto_upgrade_minor_version
   automatic_upgrade_enabled  = var.parameters.aadjprivate_registry_update.automatic_upgrade_enabled

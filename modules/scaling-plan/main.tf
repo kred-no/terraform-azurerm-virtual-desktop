@@ -1,22 +1,19 @@
 ////////////////////////
-// Variables
-////////////////////////
-
-variable "parameters" {}
-vaiable "host_pool" {}
-
-////////////////////////
-// Autoscaler Role
+// Data Sources
 ////////////////////////
 
 data "azuread_service_principal" "AUTOSCALER" {
   display_name = "Windows Virtual Desktop"
 }
 
+////////////////////////
+// Autoscaler Role
+////////////////////////
+
 resource "azurerm_role_definition" "AUTOSCALER" {
   name        = "avd-autoscaler-custom-role"
   description = "Custom Autoscaler Role (Azure Virtual Desktop)"
-  scope       = data.azurerm_subscription.CURRENT.id
+  scope       = var.arm_subscription.id
 
   permissions {
     actions = [
@@ -40,7 +37,7 @@ resource "azurerm_role_definition" "AUTOSCALER" {
   }
 
   assignable_scopes = [
-    data.azurerm_subscription.CURRENT.id,
+    var.arm_subscription.id,
   ]
 }
 
@@ -49,7 +46,7 @@ resource "azurerm_role_assignment" "AUTOSCALER" {
   role_definition_id = azurerm_role_definition.AUTOSCALER.role_definition_resource_id
 
   skip_service_principal_aad_check = true
-  scope                            = data.azurerm_subscription.CURRENT.id
+  scope                            = var.arm_subscription.id
 }
 
 ////////////////////////
@@ -57,18 +54,18 @@ resource "azurerm_role_assignment" "AUTOSCALER" {
 ////////////////////////
 
 resource "azurerm_virtual_desktop_scaling_plan" "MAIN" {
-  name          = var.parameters.autoscaler_plan_name
-  friendly_name = var.parameters.autoscaler_plan_friendly_name
-  description   = var.parameters.autoscaler_plan_description
-  time_zone     = var.parameters.autoscaler_plan_timezone
+  name          = var.parameters.name
+  friendly_name = var.parameters.friendly_name
+  description   = var.parameters.description
+  time_zone     = var.parameters.time_zone
 
   host_pool {
     hostpool_id          = var.host_pool.id
-    scaling_plan_enabled = var.parameters.autoscaler_plan_enabled
+    scaling_plan_enabled = var.parameters.enabled
   }
 
   dynamic "schedule" {
-    for_each = var.autoscaler_plan_schedules
+    for_each = var.parameters.schedules
 
     content {
       name                                 = schedule.value["name"]
@@ -92,6 +89,6 @@ resource "azurerm_virtual_desktop_scaling_plan" "MAIN" {
     }
   }
 
-  location            = data.azurerm_resource_group.MAIN.location
-  resource_group_name = data.azurerm_resource_group.MAIN.name
+  location            = var.resource_group.location
+  resource_group_name = var.resource_group.name
 }
