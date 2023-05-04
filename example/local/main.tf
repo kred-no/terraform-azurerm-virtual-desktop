@@ -7,8 +7,9 @@ locals {
   location = "northeurope"
   network  = "10.99.99.0/24"
 
-  session_host_count = 1
-  session_host_size  = "Standard_DS2_v2"
+  max_sessions_allowed = 5
+  session_host_count   = 3
+  session_host_size    = "Standard_DS2_v2"
 }
 
 //////////////////////////////////
@@ -60,7 +61,7 @@ module "AZURE_VIRTUAL_DESKTOP" {
   host_pool = {
     name                     = "DefaultHostPool"
     load_balancer_type       = "BreadthFirst"
-    maximum_sessions_allowed = 5
+    maximum_sessions_allowed = local.max_sessions_allowed
   }
 
   session_hosts = {

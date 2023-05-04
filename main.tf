@@ -26,23 +26,6 @@ data "azurerm_subnet" "MAIN" {
 }
 
 ////////////////////////
-// Monitoring | Workspace
-////////////////////////
-
-resource "azurerm_log_analytics_workspace" "MAIN" {
-  count = var.analytics.enabled ? 1 : 0
-
-  name              = var.analytics.workspace_name
-  sku               = var.analytics.workspace_sku
-  retention_in_days = var.analytics.workspace_retention_in_days
-  daily_quota_gb    = var.analytics.workspace_daily_quota_gb
-
-  tags                = var.tags
-  location            = data.azurerm_resource_group.MAIN.location
-  resource_group_name = data.azurerm_resource_group.MAIN.name
-}
-
-////////////////////////
 // Azure AD Groups
 ////////////////////////
 
@@ -54,7 +37,6 @@ module "AZURE_AD_GROUPS" {
     group_users  = var.avd_group_users
   }
 
-  // Resource References
   client_config  = data.azuread_client_config.CURRENT
   resource_group = data.azurerm_resource_group.MAIN
 }
@@ -131,37 +113,6 @@ resource "azurerm_virtual_desktop_host_pool" "MAIN" {
   location            = data.azurerm_resource_group.MAIN.location
 }
 
-resource "azurerm_monitor_diagnostic_setting" "HOST_POOL" {
-  count = var.analytics.enabled ? 1 : 0
-
-  name = format("%s-%s", var.analytics.log_prefix, azurerm_virtual_desktop_host_pool.MAIN.name)
-
-  target_resource_id         = azurerm_virtual_desktop_host_pool.MAIN.id
-  log_analytics_workspace_id = one(azurerm_log_analytics_workspace.MAIN[*].id)
-
-  dynamic "enabled_log" {
-
-    for_each = [
-      "AgentHealthStatus",
-      "Checkpoint",
-      "Connection",
-      "Error",
-      "HostRegistration",
-      "Management",
-      "NetworkData",
-      "SessionHostManagement",
-    ]
-
-    content {
-      category = enabled_log.value
-
-      retention_policy {
-        enabled = false
-      }
-    }
-  }
-}
-
 ////////////////////////
 // Module | Scaling Plan
 ////////////////////////
@@ -170,8 +121,7 @@ module "SCALING_PLAN" {
   source = "./modules/scaling-plan"
   count  = var.scaling_plan != null ? 1 : 0
 
-  parameters = var.scaling_plan
-
+  parameters       = var.scaling_plan
   tags             = var.tags
   host_pool        = azurerm_virtual_desktop_host_pool.MAIN
   arm_subscription = data.azurerm_subscription.CURRENT
@@ -182,48 +132,17 @@ module "SCALING_PLAN" {
 // Module | Workspaces
 ////////////////////////
 
-module "REMOTE_DESKTOP_WORKSPACE" {
+module "WORKSPACE" {
   source = "./modules/workspace"
 
   for_each = {
     for workspace in var.workspaces : workspace.name => workspace
   }
 
-  parameters = each.value
-
+  parameters     = each.value
   tags           = var.tags
   host_pool      = azurerm_virtual_desktop_host_pool.MAIN
   resource_group = data.azurerm_resource_group.MAIN
-}
-
-resource "azurerm_monitor_diagnostic_setting" "REMOTE_DESKTOP_WORKSPACE" {
-  for_each = {
-    for ws in module.REMOTE_DESKTOP_WORKSPACE : ws.workspace.name => ws.workspace
-    if var.analytics.enabled
-  }
-
-  name                       = format("%s-%s", var.analytics.log_prefix, each.value["name"])
-  target_resource_id         = each.value["id"]
-  log_analytics_workspace_id = one(azurerm_log_analytics_workspace.MAIN[*].id)
-
-  // See https://learn.microsoft.com/en-us/azure/azure-monitor/essentials/resource-logs-categories#microsoftdesktopvirtualizationworkspaces
-  dynamic "enabled_log" {
-
-    for_each = [
-      "Checkpoint",
-      "Error",
-      "Feed",
-      "Management",
-    ]
-
-    content {
-      category = enabled_log.value
-
-      retention_policy {
-        enabled = false
-      }
-    }
-  }
 }
 
 ////////////////////////
@@ -233,8 +152,7 @@ resource "azurerm_monitor_diagnostic_setting" "REMOTE_DESKTOP_WORKSPACE" {
 module "SESSION_HOSTS" {
   source = "./modules/session-hosts"
 
-  parameters = var.session_hosts
-
+  parameters      = var.session_hosts
   tags            = var.tags
   resource_group  = data.azurerm_resource_group.MAIN
   subnet          = data.azurerm_subnet.MAIN
@@ -242,19 +160,14 @@ module "SESSION_HOSTS" {
   key_vault       = azurerm_key_vault.MAIN
 }
 
-////////////////////////
-// Module | AVD Session Host Extensions
-////////////////////////
-
-module "VM_EXTENSIONS" {
+module "EXTENSIONS" {
   source = "./modules/extensions"
 
   for_each = {
     for vm in module.SESSION_HOSTS.virtual_machines : vm.name => vm
   }
 
-  parameters = var.session_host_extensions
-
+  parameters      = var.session_host_extensions
   virtual_machine = each.value
   tags            = var.tags
   host_pool       = azurerm_virtual_desktop_host_pool.MAIN

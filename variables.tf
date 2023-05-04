@@ -96,7 +96,7 @@ variable "host_pool" {
 }
 
 ////////////////////////
-// AVD Scaling Plan
+// AVD Host Pool | Scaling Plan
 ////////////////////////
 
 variable "scaling_plan" {
@@ -112,17 +112,17 @@ variable "scaling_plan" {
       days_of_week                         = optional(list(string), ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
       ramp_up_start_time                   = optional(string, "05:00")
       ramp_up_load_balancing_algorithm     = optional(string, "BreadthFirst")
-      ramp_up_minimum_hosts_percent        = optional(number, 35)
-      ramp_up_capacity_threshold_percent   = optional(number, 85)
+      ramp_up_minimum_hosts_percent        = optional(number, 25)
+      ramp_up_capacity_threshold_percent   = optional(number, 75)
       peak_start_time                      = optional(string, "09:00")
       peak_load_balancing_algorithm        = optional(string, "BreadthFirst")
       ramp_down_start_time                 = optional(string, "15:00")
       ramp_down_load_balancing_algorithm   = optional(string, "BreadthFirst")
-      ramp_down_minimum_hosts_percent      = optional(number, 15)
+      ramp_down_minimum_hosts_percent      = optional(number, 10)
       ramp_down_force_logoff_users         = optional(bool, true)
-      ramp_down_wait_time_minutes          = optional(number, 45)
-      ramp_down_notification_message       = optional(string, "Scaling down in progress; please relog within 45 minutes.")
-      ramp_down_capacity_threshold_percent = optional(number, 5)
+      ramp_down_wait_time_minutes          = optional(number, 30)
+      ramp_down_notification_message       = optional(string, "Scaling down in progress; please relog within 30 minutes.")
+      ramp_down_capacity_threshold_percent = optional(number, 85)
       ramp_down_stop_hosts_when            = optional(string, "ZeroSessions")
       off_peak_start_time                  = optional(string, "17:00")
       off_peak_load_balancing_algorithm    = optional(string, "BreadthFirst")
@@ -261,21 +261,4 @@ variable "session_host_extensions" {
       type_handler_version = "2.2"
     }]
   }
-}
-
-////////////////////////
-// Monitoring
-////////////////////////
-
-variable "analytics" {
-  type = object({
-    enabled                     = optional(bool, false)
-    log_prefix                  = optional(string, "avdlogs")
-    workspace_name              = optional(string, "avdmon")
-    workspace_sku               = optional(string, "PerGB2018")
-    workspace_retention_in_days = optional(number, 30)
-    workspace_daily_quota_gb    = optional(number, null)
-  })
-
-  default = {}
 }

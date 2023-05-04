@@ -13,20 +13,6 @@ variable "workspaces" {}
 ////////////////////////
 // N/A
 
-////////////////////////
-// Azure Log Analytics Workspace
-////////////////////////
-
-resource "azurerm_log_analytics_workspace" "MAIN" {
-  name              = var.parameters.workspace_name
-  sku               = var.parameters.workspace_sku
-  retention_in_days = var.parameters.workspace_retention_days
-  daily_quota_gb    = var.parameters.workspace_daily_quota_gb
-
-  tags                = var.tags
-  location            = var.virtual_network.location
-  resource_group_name = var.virtual_network.resource_group_name
-}
 
 ////////////////////////
 // Desktop Application Group | Monitoring
