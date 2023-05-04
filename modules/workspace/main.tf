@@ -1,23 +1,15 @@
 ////////////////////////
-// Variables
-////////////////////////
-
-////////////////////////
 // Desktop Workspace
 ////////////////////////
 
 resource "azurerm_virtual_desktop_workspace" "MAIN" {
-  for_each = {
-    for ws in var.workspaces : ws.name => ws
-  }
-
-  name          = each.value["name"]
-  friendly_name = each.value["friendly_name"]
-  description   = each.value["description"]
+  name          = var.parameters.name
+  friendly_name = var.parameters.friendly_name
+  description   = var.parameters.description
 
   tags                = var.tags
-  resource_group_name = data.azurerm_resource_group.MAIN.name
-  location            = data.azurerm_resource_group.MAIN.location
+  resource_group_name = var.resource_group.name
+  location            = var.resource_group.location
 }
 
 ////////////////////////
@@ -26,7 +18,7 @@ resource "azurerm_virtual_desktop_workspace" "MAIN" {
 
 resource "azurerm_virtual_desktop_application_group" "MAIN" {
   for_each = {
-    for group in var.application_groups : group.name => group
+    for group in var.parameters.application_groups : group.name => group
   }
 
   name                         = each.value["name"]
@@ -36,18 +28,18 @@ resource "azurerm_virtual_desktop_application_group" "MAIN" {
   default_desktop_display_name = each.value["default_desktop_display_name"]
 
   tags                = var.tags
-  host_pool_id        = azurerm_virtual_desktop_host_pool.MAIN.id
-  resource_group_name = data.azurerm_resource_group.MAIN.name
-  location            = data.azurerm_resource_group.MAIN.location
+  host_pool_id        = var.host_pool.id
+  resource_group_name = var.resource_group.name
+  location            = var.resource_group.location
 }
 
 resource "azurerm_virtual_desktop_workspace_application_group_association" "MAIN" {
   for_each = {
-    for group in var.application_groups : group.name => group
+    for group in var.parameters.application_groups : group.name => group
   }
 
   application_group_id = azurerm_virtual_desktop_application_group.MAIN[each.key].id
-  workspace_id         = azurerm_virtual_desktop_workspace.MAIN[each.value["workspace_name"]].id
+  workspace_id         = azurerm_virtual_desktop_workspace.MAIN.id
 }
 
 ////////////////////////
@@ -56,7 +48,7 @@ resource "azurerm_virtual_desktop_workspace_application_group_association" "MAIN
 
 resource "azurerm_virtual_desktop_application" "MAIN" {
   for_each = {
-    for app in var.applications : join("-", [app.application_group_name, app.name]) => app
+    for application in var.parameters.applications : join("-", [application.application_group_name, application.name]) => application
   }
 
   name                         = each.value["name"]

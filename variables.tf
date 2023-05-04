@@ -26,38 +26,203 @@ variable "subnet" {
 }
 
 ////////////////////////
+// Azure AD Groups
+////////////////////////
+
+variable "avd_group_users" {
+  type = object({
+    display_name = string
+    description  = optional(string)
+  })
+
+  default = {
+    display_name = "Azure Virtual Desktop Users"
+  }
+}
+
+variable "avd_group_admins" {
+  type = object({
+    display_name = string
+    description  = optional(string)
+  })
+
+  default = {
+    display_name = "Azure Virtual Desktop Administrators"
+  }
+}
+
+////////////////////////
 // Azure Key Vault
 ////////////////////////
 
-variable "key_vault_prefix" {
-  type    = string
-  default = "kv"
-}
+variable "key_vault" {
+  type = object({
+    prefix                      = optional(string, "kv")
+    sku_name                    = optional(string, "standard")
+    enabled_for_disk_encryption = optional(bool, true)
+    soft_delete_retention_days  = optional(number, 7)
+    purge_protection_enabled    = optional(bool, false)
+  })
 
-variable "key_vault_sku_name" {
-  type    = string
-  default = "standard"
-}
-
-variable "key_vault_enabled_for_disk_encryption" {
-  type    = bool
-  default = true
-}
-
-variable "key_vault_soft_delete_retention_days" {
-  type    = number
-  default = 7
-}
-
-variable "key_vault_purge_protection_enabled" {
-  type    = bool
-  default = false
+  default = {}
 }
 
 ////////////////////////
-// Azure Log Analytics
+// AVD Host Pool
 ////////////////////////
 
+variable "host_pool" {
+  type = object({
+    name                              = optional(string, "default-pool")
+    friendly_name                     = optional(string)
+    description                       = optional(string)
+    pool_type                         = optional(string, "Pooled")
+    load_balancer_type                = optional(string, "BreadthFirst")
+    validate_environment              = optional(bool, false)
+    start_vm_on_connect               = optional(bool, true)
+    maximum_sessions_allowed          = optional(number, 5)
+    custom_rdp_properties             = optional(string, "targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectlocation:i:1;videoplaybackmode:i:1;audiocapturemode:i:1;audiomode:i:0;")
+    scheduled_agent_updates_enabled   = optional(bool, false)
+    scheduled_agent_updates_timezone  = optional(string, "W. Europe Standard Time")
+    registration_token_rotation_hours = optional(number, 8)
+
+    scheduled_agent_updates = optional(list(object({
+      day_of_week = string
+      hour_of_day = number
+    })), [])
+  })
+
+  default = {}
+}
+
+////////////////////////
+// AVD Workspaces
+////////////////////////
+
+variable "workspaces" {
+  type = list(object({
+    name          = string
+    friendly_name = optional(string)
+    description   = optional(string)
+
+    application_groups = optional(list(object({
+      name                         = string
+      type                         = optional(string, "Desktop")
+      friendly_name                = optional(string)
+      description                  = optional(string)
+      default_desktop_display_name = optional(string)
+    })), [])
+
+    applications = optional(list(object({
+      name                         = string
+      application_group_name       = string
+      path                         = string
+      friendly_name                = optional(string)
+      description                  = optional(string)
+      icon_path                    = optional(string)
+      icon_index                   = optional(number)
+      show_in_portal               = optional(bool)
+      command_line_argument_policy = optional(string, "DoNotAllow")
+      command_line_arguments       = optional(string)
+    })), [])
+  }))
+
+  default = []
+}
+
+////////////////////////
+// AVD Session Hosts
+////////////////////////
+
+variable "session_hosts" {
+  type = object({
+    prefix          = optional(string, "sh")
+    count           = optional(number, 1)
+    size            = optional(string, "Standard_DS2_v2")
+    license_type    = optional(string, "None")
+    priority        = optional(string, "Regular")
+    eviction_policy = optional(string)
+    admin_username  = optional(string, "Superman")
+    admin_password  = optional(string)
+    disk_size_gb    = optional(number)
+    timezone        = optional(string, "W. Europe Standard Time")
+    source_image_id = optional(string)
+
+    source_image = optional(object({
+      publisher = optional(string, "MicrosoftWindowsDesktop")
+      offer     = optional(string, "office-365")
+      sku       = optional(string, "win11-22h2-avd-m365")
+      version   = optional(string, "latest")
+    }), {})
+
+    shared_image = optional(object({
+      name                = string
+      gallery_name        = string
+      resource_group_name = string
+    }))
+  })
+
+  default = {}
+}
+
+
+////////////////////////
+// AVD Session Host Extensions
+////////////////////////
+
+variable "session_host_extensions" {
+  type = object({
+    aad_login_for_windows = optional(object({
+      enabled                    = optional(bool, true)
+      type_handler_version       = optional(string, "2.0") // Working: 1.0
+      auto_upgrade_minor_version = optional(bool, true)
+      automatic_upgrade_enabled  = optional(bool, false)
+      intune_registration        = optional(bool, true)
+    }), {})
+
+    // This function includes a 6 minute 'sleep' due to 'Intune'
+    join_hostpool = optional(object({
+      enabled                    = optional(bool, true)
+      type_handler_version       = optional(string, "2.83") // Working: 2.73
+      auto_upgrade_minor_version = optional(bool, true)
+      automatic_upgrade_enabled  = optional(bool, false)
+      modules_url                = optional(string, "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_06-15-2022.zip") # Working: Configuration_06-15-2022.zip
+      modules_function           = optional(string, "Configuration.ps1\\AddSessionHost") // See https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/scripts/Configuration.ps1
+    }), {})
+
+    aadjprivate_registry_update = optional(object({
+      enabled                    = optional(bool, true)
+      type_handler_version       = optional(string, "1.10") // Working: 1.10
+      auto_upgrade_minor_version = optional(bool, true)
+      automatic_upgrade_enabled  = optional(bool, false)
+    }), {})
+
+    extra_extensions = optional(list(object({
+      name                       = string
+      publisher                  = string
+      type                       = string
+      type_handler_version       = string
+      auto_upgrade_minor_version = optional(bool, true)
+      automatic_upgrade_enabled  = optional(bool, false)
+      json_settings              = optional(string)
+      json_protected_settings    = optional(string)
+    })), [])
+  })
+
+  default = {
+    extra_extensions = [{
+      name                 = "BGInfo"
+      publisher            = "Microsoft.Compute"
+      type                 = "BGInfo"
+      type_handler_version = "2.2"
+    }]
+  }
+}
+
+////////////////////////
+// Monitoring
+////////////////////////
+/*
 variable "log_analytics_workspace_name" {
   type    = string
   default = "avd-analytics"
@@ -81,279 +246,13 @@ variable "log_analytics_workspace_daily_quota_gb" {
 variable "log_monitor_prefix" {
   type    = string
   default = "monitor"
-}
+}*/
 
 ////////////////////////
-// AVD | Subnet
+// AVD Autoscaling
 ////////////////////////
 
-variable "nsg_rules" {
-  type = list(object({
-    priority = number
-    name     = string
-
-    direction                  = optional(string, "Inbound")
-    access                     = optional(string, "Allow")
-    protocol                   = optional(string, "Tcp")
-    source_port_range          = optional(string)
-    source_address_prefix      = optional(string)
-    destination_port_range     = optional(string)
-    destination_address_prefix = optional(string)
-  }))
-
-  default = [{
-    priority               = 500
-    name                   = "allow-3389-inbound-tcp"
-    source_port_range      = "*"
-    source_address_prefix  = "*"
-    destination_port_range = "3389"
-  }]
-}
-
-////////////////////////
-// AVD | Host Pool
-////////////////////////
-
-variable "hostpool_name" {
-  type    = string
-  default = "default-hostpool"
-}
-
-variable "hostpool_friendly_name" {
-  type    = string
-  default = null
-}
-
-variable "hostpool_description" {
-  type    = string
-  default = null
-}
-
-variable "hostpool_type" {
-  type    = string
-  default = "Pooled"
-}
-
-variable "hostpool_load_balancer_type" {
-  type    = string
-  default = "BreadthFirst"
-}
-
-variable "hostpool_validate_environment" {
-  type    = bool
-  default = false
-}
-
-variable "hostpool_start_vm_on_connect" {
-  type    = bool
-  default = true
-}
-
-variable "hostpool_maximum_sessions_allowed" {
-  type    = number
-  default = 5
-}
-
-variable "hostpool_custom_rdp_properties" {
-  type    = string
-  default = "targetisaadjoined:i:1;enablerdsaadauth:i:1;redirectlocation:i:1;videoplaybackmode:i:1;audiocapturemode:i:1;audiomode:i:0;"
-}
-
-variable "hostpool_scheduled_agent_updates_enabled" {
-  type    = bool
-  default = false
-}
-
-variable "hostpool_scheduled_agent_updates_timezone" {
-  type    = string
-  default = "W. Europe Standard Time"
-}
-
-variable "hostpool_scheduled_agent_updates" {
-  type = list(object({
-    day_of_week = string
-    hour_of_day = number
-  }))
-
-  default = []
-}
-
-variable "hostpool_registration_token_rotation_hours" {
-  type    = number
-  default = 8
-}
-
-////////////////////////
-// AVD | Session Host
-////////////////////////
-
-variable "host_prefix" {
-  type    = string
-  default = "sh"
-}
-
-variable "host_count" {
-  type    = number
-  default = 1
-}
-
-variable "host_license_type" {
-  type    = string
-  default = "None"
-}
-
-variable "host_size" {
-  type    = string
-  default = "Standard_DS2_v2"
-}
-
-variable "host_priority" {
-  type    = string
-  default = "Regular"
-}
-
-variable "host_eviction_policy" {
-  type    = string
-  default = null
-}
-
-variable "host_admin_username" {
-  type    = string
-  default = "Superman"
-}
-
-variable "host_admin_password" {
-  type = string
-  #default = "Cl@rkK3nt"
-  default = ""
-}
-
-variable "host_disk_size_gb" {
-  type    = number
-  default = 127
-}
-
-variable "source_image_id" {
-  type    = string
-  default = null
-}
-
-variable "host_gallery_image" {
-  type = object({
-    name                = string
-    gallery_name        = string
-    resource_group_name = string
-  })
-
-  default = null
-}
-
-variable "host_source_image" {
-  type = object({
-    publisher = optional(string)
-    offer     = optional(string)
-    sku       = optional(string)
-    version   = optional(string, "latest")
-  })
-
-  default = {
-    publisher = "MicrosoftWindowsDesktop"
-    offer     = "office-365"
-    sku       = "win11-22h2-avd-m365"
-  }
-}
-
-variable "host_extension_parameters" {
-  type = object({
-    modules_url_add_session_host = optional(string, "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_06-15-2022.zip")
-    type_handler_version         = optional(string, "2.73")
-  })
-
-  default = {}
-}
-
-variable "host_timezone" {
-  description = "See https://jackstromberg.com/2017/01/list-of-time-zones-consumed-by-azure/"
-
-  type    = string
-  default = "W. Europe Standard Time"
-}
-
-////////////////////////
-// AVD | Workspaces
-////////////////////////
-
-variable "workspaces" {
-  type = list(object({
-    name          = string
-    friendly_name = optional(string)
-    description   = optional(string)
-  }))
-
-  default = [{
-    name = "DefaultWorkspace"
-  }]
-}
-
-////////////////////////
-// AVD | Workspace Application Groups
-////////////////////////
-
-variable "application_groups" {
-  type = list(object({
-    name                         = string
-    workspace_name               = string
-    type                         = optional(string, "Desktop")
-    friendly_name                = optional(string)
-    description                  = optional(string)
-    default_desktop_display_name = optional(string)
-  }))
-
-  default = [{
-    workspace_name = "DefaultWorkspace"
-    type           = "Desktop"
-    name           = "RemoteDesktop"
-    }, {
-    workspace_name = "DefaultWorkspace"
-    type           = "RemoteApp"
-    name           = "RemoteApps"
-  }]
-}
-
-////////////////////////
-// AVD | Workspace RemoteApp Applications
-////////////////////////
-
-variable "applications" {
-  type = list(object({
-    name                         = string
-    application_group_name       = string
-    path                         = string
-    friendly_name                = optional(string)
-    description                  = optional(string)
-    icon_path                    = optional(string)
-    icon_index                   = optional(number)
-    show_in_portal               = optional(bool)
-    command_line_argument_policy = optional(string, "DoNotAllow")
-    command_line_arguments       = optional(string)
-  }))
-
-  default = [{
-    application_group_name = "RemoteApps"
-    name                   = "notepad"
-    friendly_name          = "Notepad"
-    description            = "Notepad on Azure Virtual Desktop"
-    path                   = "C:\\Program Files\\WindowsApps\\Microsoft.WindowsNotepad_11.2112.32.0_x64__8wekyb3d8bbwe\\Notepad\\Notepad.exe"
-    icon_path              = "C:\\Program Files\\WindowsApps\\Microsoft.WindowsNotepad_11.2112.32.0_x64__8wekyb3d8bbwe\\Notepad\\Notepad.exe"
-    icon_index             = 0
-  }]
-}
-
-////////////////////////
-// AVD | Autoscaler
-////////////////////////
-
-variable "autoscaler_plan_name" {
+/*variable "autoscaler_plan_name" {
   type    = string
   default = "default-scaling-plan"
 }
@@ -404,31 +303,4 @@ variable "autoscaler_plan_schedules" {
     name = "standard-schedule"
   }]
 }
-
-////////////////////////
-// AVD | Azure AD
-////////////////////////
-
-variable "aad_group_users" {
-  type = object({
-    name         = string
-    display_name = string
-  })
-
-  default = {
-    name         = "AVD Users"
-    display_name = "Azure Virtual Desktop Users"
-  }
-}
-
-variable "aad_group_admins" {
-  type = object({
-    name         = string
-    display_name = string
-  })
-
-  default = {
-    name         = "AVD Administrators"
-    display_name = "Azure Virtual Desktop Administrators"
-  }
-}
+*/

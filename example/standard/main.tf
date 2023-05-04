@@ -3,10 +3,12 @@
 //////////////////////////////////
 
 locals {
-  prefix           = "AzureVirtualDesktop"
-  location         = "northeurope"
-  address_space    = ["10.99.99.0/24"]
-  address_prefixes = ["10.99.99.0/26"]
+  prefix   = "AzureVirtualDesktop"
+  location = "northeurope"
+  network  = "10.99.99.0/24"
+
+  session_host_count = 0
+  session_host_size  = "Standard_DS2_v2"
 }
 
 //////////////////////////////////
@@ -28,7 +30,7 @@ resource "azurerm_resource_group" "MAIN" {
 
 resource "azurerm_virtual_network" "MAIN" {
   name          = format("%s-VirtualNetwork", local.prefix)
-  address_space = local.address_space
+  address_space = [cidrsubnet(local.network, 0, 0)]
 
   resource_group_name = azurerm_resource_group.MAIN.name
   location            = azurerm_resource_group.MAIN.location
@@ -36,7 +38,7 @@ resource "azurerm_virtual_network" "MAIN" {
 
 resource "azurerm_subnet" "MAIN" {
   name             = format("%s-Subnet", local.prefix)
-  address_prefixes = local.address_prefixes
+  address_prefixes = [cidrsubnet(local.network, 2, 0)]
 
   virtual_network_name = azurerm_virtual_network.MAIN.name
   resource_group_name  = azurerm_virtual_network.MAIN.resource_group_name
@@ -46,11 +48,33 @@ resource "azurerm_subnet" "MAIN" {
 // Module Config
 //////////////////////////////////
 
-module "AVD" {
+module "VIRTUAL_DESKTOP" {
   source = "./../../../terraform-azurerm-virtual-desktop"
 
   // Module Config
-  # N/A
+  avd_group_users  = { display_name = "Demo AVD Users" }
+  avd_group_admins = { display_name = "Demo AVD Admins" }
+
+  host_pool = {
+    name                     = "primary-pool"
+    load_balancer_type       = "BreadthFirst"
+    maximum_sessions_allowed = 3
+  }
+
+  session_hosts = {
+    prefix         = "shvm"
+    count          = local.session_host_count
+    size           = local.session_host_size
+  }
+
+  workspaces = [{
+    name = "DefaultWorkspace"
+
+    application_groups = [{
+      name = "ExampleRemoteDesktop"
+      type = "Desktop"
+    }]
+  }]
 
   // Resource References
   resource_group = azurerm_resource_group.MAIN

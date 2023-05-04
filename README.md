@@ -18,3 +18,4 @@ Deployment of Azure Virtual Desktop solution (single host-pool; for now..)
 
   * https://learn.microsoft.com/en-us/azure/developer/terraform/configure-azure-virtual-desktop
   * https://wiki.techstormpc.com/docs/azure-virtual-desktop
+  * https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules
