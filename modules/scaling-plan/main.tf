@@ -54,6 +54,10 @@ resource "azurerm_role_assignment" "AUTOSCALER" {
 ////////////////////////
 
 resource "azurerm_virtual_desktop_scaling_plan" "MAIN" {
+  depends_on = [
+    azurerm_role_assignment.AUTOSCALER,
+  ]
+
   name          = var.parameters.name
   friendly_name = var.parameters.friendly_name
   description   = var.parameters.description

@@ -70,20 +70,20 @@ module "AZURE_VIRTUAL_DESKTOP" {
     enabled = local.scaling_enabled
 
     schedules = [{
-      name                 = "Weekdays"
-      days_of_week         = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-      
+      name         = "Weekdays"
+      days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+
       ramp_up_start_time   = "06:00"
       peak_start_time      = "08:00"
       ramp_down_start_time = "15:30"
       off_peak_start_time  = "21:00"
-      
+
       ramp_up_minimum_hosts_percent      = 25
       ramp_up_capacity_threshold_percent = 75
       }, {
-      name                 = "Weekend"
-      days_of_week         = ["Saturday"]
-      
+      name         = "Weekend"
+      days_of_week = ["Saturday"]
+
       ramp_up_start_time   = "07:00"
       peak_start_time      = "08:00"
       ramp_down_start_time = "15:30"
