@@ -7,7 +7,7 @@ locals {
   location = "northeurope"
   network  = "10.99.99.0/24"
 
-  session_host_count   = 0
+  session_host_count   = 1
   session_host_size    = "Standard_DS2_v2"
   max_sessions_allowed = 5
   scaling_enabled      = false

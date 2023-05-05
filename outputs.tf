@@ -17,3 +17,13 @@ output "application_security_group" {
   sensitive = false
   value     = module.SESSION_HOSTS.application_security_group
 }
+
+output "admin_group" {
+  sensitive = false
+  value     = module.AZURE_AD_GROUPS.admin_group
+}
+
+output "user_group" {
+  sensitive = false
+  value     = module.AZURE_AD_GROUPS.user_group
+}
