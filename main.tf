@@ -160,6 +160,15 @@ module "SESSION_HOSTS" {
   key_vault       = azurerm_key_vault.MAIN
 }
 
+resource "time_rotating" "HOSTPOOL_TOKEN" {
+  rotation_hours = var.host_pool.registration_token_rotation_hours
+}
+
+resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
+  expiration_date = time_rotating.HOSTPOOL_TOKEN.rotation_rfc3339
+  hostpool_id     = azurerm_virtual_desktop_host_pool.MAIN.id
+}
+
 module "EXTENSIONS" {
   source = "./modules/extensions"
 
@@ -167,8 +176,9 @@ module "EXTENSIONS" {
     for vm in module.SESSION_HOSTS.virtual_machines : vm.name => vm
   }
 
-  parameters      = var.session_host_extensions
-  virtual_machine = each.value
-  tags            = var.tags
-  host_pool       = azurerm_virtual_desktop_host_pool.MAIN
+  parameters             = var.session_host_extensions
+  virtual_machine        = each.value
+  tags                   = var.tags
+  host_pool              = azurerm_virtual_desktop_host_pool.MAIN
+  host_pool_registration = azurerm_virtual_desktop_host_pool_registration_info.MAIN
 }

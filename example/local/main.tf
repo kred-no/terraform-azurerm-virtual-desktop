@@ -7,9 +7,10 @@ locals {
   location = "northeurope"
   network  = "10.99.99.0/24"
 
-  max_sessions_allowed = 5
-  session_host_count   = 3
+  session_host_count   = 0
   session_host_size    = "Standard_DS2_v2"
+  max_sessions_allowed = 5
+  scaling_enabled      = false
 }
 
 //////////////////////////////////
@@ -62,6 +63,27 @@ module "AZURE_VIRTUAL_DESKTOP" {
     name                     = "DefaultHostPool"
     load_balancer_type       = "BreadthFirst"
     maximum_sessions_allowed = local.max_sessions_allowed
+  }
+
+  scaling_plan = {
+    name    = "default-scaling-plan"
+    enabled = local.scaling_enabled
+
+    schedules = [{
+      name                 = "Weekdays"
+      days_of_week         = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+      ramp_up_start_time   = "06:00"
+      peak_start_time      = "08:00"
+      ramp_down_start_time = "15:30"
+      off_peak_start_time  = "21:00"
+      }, {
+      name                 = "Weekend"
+      days_of_week         = ["Saturday"]
+      ramp_up_start_time   = "07:00"
+      peak_start_time      = "08:00"
+      ramp_down_start_time = "15:30"
+      off_peak_start_time  = "18:00"
+    }]
   }
 
   session_hosts = {

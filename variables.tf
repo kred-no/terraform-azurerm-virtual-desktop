@@ -92,7 +92,14 @@ variable "host_pool" {
     })), [])
   })
 
-  default = {}
+  default = {
+    scheduled_agent_updates_enabled = true
+
+    scheduled_agent_updates = [{
+      day_of_week = "Saturday"
+      hour_of_day = 2
+    }]
+  }
 }
 
 ////////////////////////
@@ -109,7 +116,7 @@ variable "scaling_plan" {
 
     schedules = optional(list(object({
       name                                 = string
-      days_of_week                         = optional(list(string), ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
+      days_of_week                         = list(string)
       ramp_up_start_time                   = optional(string, "05:00")
       ramp_up_load_balancing_algorithm     = optional(string, "BreadthFirst")
       ramp_up_minimum_hosts_percent        = optional(number, 25)
@@ -134,7 +141,8 @@ variable "scaling_plan" {
     name = "default-scaling-plan"
 
     schedules = [{
-      name = "Weekdays"
+      name         = "Weekdays"
+      days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
     }]
   }
 }
@@ -218,7 +226,7 @@ variable "session_host_extensions" {
   type = object({
     aad_login_for_windows = optional(object({
       enabled                    = optional(bool, true)
-      type_handler_version       = optional(string, "2.0") // Working: 1.0
+      type_handler_version       = optional(string, "2.0")
       auto_upgrade_minor_version = optional(bool, true)
       automatic_upgrade_enabled  = optional(bool, false)
       intune_registration        = optional(bool, true)
@@ -227,16 +235,16 @@ variable "session_host_extensions" {
     // This function includes a 6+ minute 'sleep' due to 'Intune' registration
     join_hostpool = optional(object({
       enabled                    = optional(bool, true)
-      type_handler_version       = optional(string, "2.83") // Working: 2.73
+      type_handler_version       = optional(string, "2.83")
       auto_upgrade_minor_version = optional(bool, true)
       automatic_upgrade_enabled  = optional(bool, false)
-      modules_url                = optional(string, "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_06-15-2022.zip") # Working: Configuration_06-15-2022.zip
+      modules_url                = optional(string, "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_04-24-2023.zip") # Working: Configuration_06-15-2022.zip
       modules_function           = optional(string, "Configuration.ps1\\AddSessionHost")                                                                // See https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/scripts/Configuration.ps1
     }), {})
 
     aadjprivate_registry_update = optional(object({
       enabled                    = optional(bool, true)
-      type_handler_version       = optional(string, "1.10") // Working: 1.10
+      type_handler_version       = optional(string, "1.10")
       auto_upgrade_minor_version = optional(bool, true)
       automatic_upgrade_enabled  = optional(bool, false)
     }), {})

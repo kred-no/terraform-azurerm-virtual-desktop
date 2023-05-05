@@ -14,8 +14,12 @@ Deployment of Azure Virtual Desktop solution (single host-pool; for now..)
   * Host VMs joined to Azure AD.
   * User Authentication is done via Azure AD groups
 
+> NOTE: Terraform will fail to update any VMs (due to 'Extensions') that are shut-down from 'Scaling Plan' or any other reason. This includes 'destroy' actions on the VMs.
+
 ## Resources
 
-  * https://learn.microsoft.com/en-us/azure/developer/terraform/configure-azure-virtual-desktop
-  * https://wiki.techstormpc.com/docs/azure-virtual-desktop
-  * https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules
+  1. https://learn.microsoft.com/en-us/azure/developer/terraform/configure-azure-virtual-desktop
+  1. https://learn.microsoft.com/en-us/azure/developer/terraform/create-avd-session-host
+  1. https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules
+  1. https://github.com/DeanCefola/Azure-WVD/blob/master/PowerShell/New-WVDSessionHost.ps1
+  1. https://wiki.techstormpc.com/docs/azure-virtual-desktop

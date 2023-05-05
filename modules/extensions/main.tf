@@ -1,22 +1,34 @@
 ////////////////////////
-// Extra Extensions
+// Extension | Host Pool Registration
 ////////////////////////
 
-resource "azurerm_virtual_machine_extension" "EXTRA" {
-  for_each = {
-    for extension in var.parameters.extra_extensions : extension.name => extension
-  }
+resource "azurerm_virtual_machine_extension" "JOIN_HOSTPOOL" {
+  count = var.parameters.join_hostpool.enabled ? 1 : 0
 
-  name      = each.value["name"]
-  publisher = each.value["publisher"]
-  type      = each.value["type"]
+  name      = "AddSessionHost"
+  publisher = "Microsoft.Powershell"
+  type      = "DSC"
 
-  type_handler_version       = each.value["type_handler_version"]
-  auto_upgrade_minor_version = each.value["auto_upgrade_minor_version"]
-  automatic_upgrade_enabled  = each.value["automatic_upgrade_enabled"]
+  type_handler_version       = var.parameters.join_hostpool.type_handler_version
+  auto_upgrade_minor_version = var.parameters.join_hostpool.auto_upgrade_minor_version
+  automatic_upgrade_enabled  = var.parameters.join_hostpool.automatic_upgrade_enabled
 
-  settings           = each.value["json_settings"]
-  protected_settings = each.value["json_protected_settings"]
+  settings = jsonencode({
+    modulesUrl            = var.parameters.join_hostpool.modules_url
+    configurationFunction = var.parameters.join_hostpool.modules_function
+
+    properties = {
+      HostPoolName             = var.host_pool.name
+      AadJoin                  = true
+      UseAgentDownloadEndpoint = true
+    }
+  })
+
+  protected_settings = jsonencode({
+    properties = {
+      RegistrationInfoToken = var.host_pool_registration.token
+    }
+  })
 
   virtual_machine_id = var.virtual_machine.id
   tags               = var.tags
@@ -33,6 +45,10 @@ resource "azurerm_virtual_machine_extension" "EXTRA" {
 
 resource "azurerm_virtual_machine_extension" "AZURE_AD_LOGIN" {
   count = var.parameters.aad_login_for_windows.enabled ? 1 : 0
+
+  depends_on = [
+    azurerm_virtual_machine_extension.JOIN_HOSTPOOL,
+  ]
 
   name      = "AADLogin"
   publisher = "Microsoft.Azure.ActiveDirectory"
@@ -55,49 +71,26 @@ resource "azurerm_virtual_machine_extension" "AZURE_AD_LOGIN" {
 }
 
 ////////////////////////
-// Extension | Host Pool Registration
+// Extra/Custom Extensions
 ////////////////////////
 
-resource "time_rotating" "HOSTPOOL_TOKEN" {
-  rotation_hours = 8
-}
-
-resource "azurerm_virtual_desktop_host_pool_registration_info" "MAIN" {
-  hostpool_id     = var.host_pool.id
-  expiration_date = time_rotating.HOSTPOOL_TOKEN.rotation_rfc3339
-
-  lifecycle {
-    ignore_changes = [expiration_date]
+resource "azurerm_virtual_machine_extension" "EXTRA" {
+  for_each = {
+    for extension in var.parameters.extra_extensions : extension.name => extension
   }
-}
 
-resource "azurerm_virtual_machine_extension" "JOIN_HOSTPOOL" {
-  count      = var.parameters.join_hostpool.enabled ? 1 : 0
   depends_on = [azurerm_virtual_machine_extension.AZURE_AD_LOGIN]
 
-  name      = "AddSessionHost"
-  publisher = "Microsoft.Powershell"
-  type      = "DSC"
+  name      = each.value["name"]
+  publisher = each.value["publisher"]
+  type      = each.value["type"]
 
-  type_handler_version       = var.parameters.join_hostpool.type_handler_version
-  auto_upgrade_minor_version = var.parameters.join_hostpool.auto_upgrade_minor_version
-  automatic_upgrade_enabled  = var.parameters.join_hostpool.automatic_upgrade_enabled
+  type_handler_version       = each.value["type_handler_version"]
+  auto_upgrade_minor_version = each.value["auto_upgrade_minor_version"]
+  automatic_upgrade_enabled  = each.value["automatic_upgrade_enabled"]
 
-  settings = jsonencode({
-    modulesUrl            = var.parameters.join_hostpool.modules_url
-    configurationFunction = var.parameters.join_hostpool.modules_function
-
-    properties = {
-      HostPoolName = var.host_pool.name
-      aadJoin      = true
-    }
-  })
-
-  protected_settings = jsonencode({
-    properties = {
-      registrationInfoToken = azurerm_virtual_desktop_host_pool_registration_info.MAIN.token
-    }
-  })
+  settings           = each.value["json_settings"]
+  protected_settings = each.value["json_protected_settings"]
 
   virtual_machine_id = var.virtual_machine.id
   tags               = var.tags
@@ -110,14 +103,13 @@ resource "azurerm_virtual_machine_extension" "JOIN_HOSTPOOL" {
 ////////////////////////
 // Extension | Azure AD Fix
 ////////////////////////
-// Required when using AAD instead of ADDS. Run last; forces reboot
+// Run last; forces reboot. Required when using AAD instead of ADDS.
 // az vm extension image list --name CustomScriptExtension --publisher Microsoft.Compute --location <location> -o table
 
 resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   count = var.parameters.aadjprivate_registry_update.enabled ? 1 : 0
 
   depends_on = [
-    azurerm_virtual_machine_extension.JOIN_HOSTPOOL,
     azurerm_virtual_machine_extension.EXTRA,
   ]
 
@@ -130,10 +122,10 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
   automatic_upgrade_enabled  = var.parameters.aadjprivate_registry_update.automatic_upgrade_enabled
 
   settings = jsonencode({
-    commandToExecute = join("", [
-      "powershell.exe -Command \"New-Item -Path HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent\\AADJPrivate\"",
-      ";shutdown -r -t 15",
-      ";exit 0",
+    commandToExecute = join(";", [
+      "powershell.exe -Command \"New-Item -Path HKLM:\\SOFTWARE\\Microsoft\\RDInfraAgent -Name AADJPrivate -Force\"",
+      "shutdown /r /t 10",
+      "exit 0",
     ])
   })
 
@@ -144,3 +136,4 @@ resource "azurerm_virtual_machine_extension" "AADJPRIVATE" {
     ignore_changes = [settings, protected_settings, tags]
   }
 }
+

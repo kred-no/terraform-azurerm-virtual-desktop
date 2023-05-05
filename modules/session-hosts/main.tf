@@ -96,7 +96,8 @@ resource "azurerm_network_interface_application_security_group_association" "MAI
 ////////////////////////
 
 resource "azurerm_windows_virtual_machine" "MAIN" {
-  count = var.parameters.count
+  count      = var.parameters.count
+  depends_on = [azurerm_network_interface.MAIN]
 
   name          = format("%s%s", var.parameters.prefix, count.index)
   computer_name = random_string.HOSTNAME[count.index].result
