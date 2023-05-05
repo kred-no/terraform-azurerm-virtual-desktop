@@ -52,7 +52,8 @@ resource "azurerm_virtual_machine_extension" "JOIN_HOSTPOOL" {
     properties = {
       HostPoolName             = var.host_pool.name
       AadJoin                  = true
-      UseAgentDownloadEndpoint = true
+      AadJoinPreview           = false
+      UseAgentDownloadEndpoint = false
     }
   })
 
