@@ -1,3 +1,7 @@
+////////////////////////
+// Outputs
+////////////////////////
+
 output "resource_group" {
   sensitive = false
   value     = data.azurerm_resource_group.MAIN
@@ -27,6 +31,10 @@ output "user_group" {
   sensitive = false
   value     = module.AZURE_AD_GROUPS.user_group
 }
+
+////////////////////////
+// Sensitive Outputs
+////////////////////////
 
 output "session_hosts" {
   sensitive = true
