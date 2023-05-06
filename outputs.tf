@@ -29,6 +29,6 @@ output "user_group" {
 }
 
 output "session_hosts" {
-  sensitive = false
+  sensitive = true
   value     = module.SESSION_HOSTS.virtual_machines
 }
