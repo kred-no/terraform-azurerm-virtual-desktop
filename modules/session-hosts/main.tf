@@ -21,7 +21,7 @@ data "azurerm_shared_image" "MAIN" {
 resource "random_string" "HOSTNAME" {
   count = var.parameters.count
 
-  length  = 10
+  length  = 4
   upper   = false
   special = false
 
@@ -100,7 +100,7 @@ resource "azurerm_windows_virtual_machine" "MAIN" {
   depends_on = [azurerm_network_interface.MAIN]
 
   name          = format("%s%s", var.parameters.prefix, count.index)
-  computer_name = random_string.HOSTNAME[count.index].result
+  computer_name = format("%s%s-%s", var.parameters.prefix, count.index, random_string.HOSTNAME[count.index].result)
 
   license_type = var.parameters.license_type
   size         = var.parameters.size
