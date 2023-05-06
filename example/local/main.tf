@@ -7,7 +7,7 @@ locals {
   location = "northeurope"
   network  = "10.99.99.0/24"
 
-  session_host_count   = 2
+  session_host_count   = 1
   session_host_size    = "Standard_DS2_v2"
   max_sessions_allowed = 5
   scaling_enabled      = true
@@ -112,4 +112,8 @@ module "AZURE_VIRTUAL_DESKTOP" {
   // Resource References
   resource_group = azurerm_resource_group.MAIN
   subnet         = azurerm_subnet.MAIN
+}
+
+output "sh_info" {
+  value = module.AZURE_VIRTUAL_DESKTOP.session_hosts
 }

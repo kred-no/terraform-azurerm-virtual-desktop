@@ -32,11 +32,17 @@ output "user_group" {
   value     = module.AZURE_AD_GROUPS.user_group
 }
 
+output "session_hosts" {
+  sensitive = false
+  
+  value = [
+    for vm in module.SESSION_HOSTS.virtual_machines : {
+      name = vm.name
+      id   = vm.id
+  }]
+}
+
 ////////////////////////
 // Sensitive Outputs
 ////////////////////////
-
-output "session_hosts" {
-  sensitive = true
-  value     = module.SESSION_HOSTS.virtual_machines
-}
+// N/A
