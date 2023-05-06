@@ -27,3 +27,8 @@ output "user_group" {
   sensitive = false
   value     = module.AZURE_AD_GROUPS.user_group
 }
+
+output "session_hosts" {
+  sensitive = false
+  value     = module.SESSION_HOSTS.virtual_machines
+}
