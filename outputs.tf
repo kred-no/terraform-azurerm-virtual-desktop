@@ -37,9 +37,11 @@ output "session_hosts" {
   
   value = [
     for vm in module.SESSION_HOSTS.virtual_machines : {
-      name         = vm.name
-      id           = vm.id
-      principal_id = vm.identity.0.principal_id
+      id                 = vm.id
+      name               = vm.name
+      computer_name      = vm.computer_name
+      virtual_machine_id = vm.virtual_machine_id
+      principal_id       = vm.identity.0.principal_id
   }]
 }
 
